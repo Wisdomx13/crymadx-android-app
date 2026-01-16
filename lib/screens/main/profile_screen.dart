@@ -1943,8 +1943,7 @@ class _EditProfileModal extends StatelessWidget {
                     label: 'Save Changes',
                     onPressed: () {
                       profileProvider.updateProfile(
-                        name: nameController.text,
-                        email: emailController.text,
+                        fullName: nameController.text,
                         phone: phoneController.text,
                       );
                       Navigator.pop(context);
@@ -2123,12 +2122,50 @@ class _TwoFAModalState extends State<_TwoFAModal> {
             label: 'Disable 2FA',
             variant: ButtonVariant.sell,
             onPressed: () {
-              provider.disable2FA();
-              Navigator.pop(context);
+              _showDisable2FADialog(context, provider);
             },
           ),
         ),
       ],
+    );
+  }
+
+  void _showDisable2FADialog(BuildContext context, ProfileProvider provider) {
+    final codeController = TextEditingController();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: isDark ? AppColors.backgroundCard : Colors.white,
+        title: Text('Disable 2FA', style: TextStyle(color: isDark ? Colors.white : Colors.black)),
+        content: TextField(
+          controller: codeController,
+          keyboardType: TextInputType.number,
+          maxLength: 6,
+          decoration: InputDecoration(
+            labelText: 'Enter 2FA Code',
+            labelStyle: TextStyle(color: isDark ? AppColors.textSecondary : Colors.grey),
+          ),
+          style: TextStyle(color: isDark ? Colors.white : Colors.black),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              if (codeController.text.length == 6) {
+                Navigator.pop(ctx);
+                await provider.disable2FA(codeController.text);
+                if (context.mounted) Navigator.pop(context);
+              }
+            },
+            child: Text('Disable', style: TextStyle(color: AppColors.tradingSell)),
+          ),
+        ],
+      ),
     );
   }
 
@@ -2356,7 +2393,7 @@ class _TwoFAModalState extends State<_TwoFAModal> {
             label: 'Verify & Enable',
             onPressed: widget.verificationController.text.length == 6
                 ? () {
-                    provider.enable2FA();
+                    provider.enable2FA(widget.verificationController.text);
                     setState(() => _step = 3);
                   }
                 : null,

@@ -62,8 +62,8 @@ class CryptoService {
         queryParameters: {'symbol': '${symbol}USDT'},
       );
 
-      final data = response is Map ? response : null;
-      if (data != null) {
+      if (response is Map) {
+        final data = Map<String, dynamic>.from(response);
         return CryptoTicker.fromBinance(data);
       }
     } catch (e) {

@@ -241,10 +241,27 @@ class ProfileProvider extends ChangeNotifier {
     _phone = user.phone ?? '';
     _country = user.country ?? '';
     _avatarId = user.avatar ?? 'marcus';
-    _avatarUrl = user.avatarUrl;
+    _avatarUrl = user.avatar; // Use avatar field for URL
     _twoFactorEnabled = user.twoFactorEnabled;
-    _kycStatus = user.kycStatus ?? 'not_started';
+    // Convert kycLevel to status string
+    _kycStatus = _kycLevelToStatus(user.kycLevel);
     notifyListeners();
+  }
+
+  /// Convert KYC level to status string
+  String _kycLevelToStatus(int level) {
+    switch (level) {
+      case 0:
+        return 'not_started';
+      case 1:
+        return 'pending';
+      case 2:
+        return 'verified';
+      case 3:
+        return 'advanced';
+      default:
+        return 'not_started';
+    }
   }
 
   /// Clear error
