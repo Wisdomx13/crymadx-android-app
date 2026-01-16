@@ -4,10 +4,10 @@ class ApiConfig {
   ApiConfig._();
 
   /// Development API base URL
-  static const String devBaseUrl = 'https://api-dev.crymadx.io/api';
+  static const String devBaseUrl = 'https://backend.crymadx.io/api';
 
   /// Production API base URL
-  static const String prodBaseUrl = 'https://api.crymadx.io/api';
+  static const String prodBaseUrl = 'https://backend.crymadx.io/api';
 
   /// Current environment (set to true for production)
   static const bool isProduction = true;
