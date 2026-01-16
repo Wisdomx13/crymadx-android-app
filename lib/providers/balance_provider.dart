@@ -80,9 +80,11 @@ class BalanceProvider extends ChangeNotifier {
     } catch (e) {
       _error = e.toString().replaceAll('Exception: ', '');
       _isLoading = false;
-      // Keep existing data or show mock data
+      // Show zero balances on error - no mock data
       if (_allAssets.isEmpty) {
-        _loadMockData();
+        _totalBalance = 0.0;
+        _fundingBalance = 0.0;
+        _tradingBalance = 0.0;
       }
       notifyListeners();
     }

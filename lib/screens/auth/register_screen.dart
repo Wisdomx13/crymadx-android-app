@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 import '../../theme/colors.dart';
 import '../../navigation/app_router.dart';
+import '../../providers/auth_provider.dart';
 
 /// Register Screen - Sleek dark design matching login
 class RegisterScreen extends StatefulWidget {
@@ -29,6 +31,81 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _confirmPasswordController.dispose();
     _referralController.dispose();
     super.dispose();
+  }
+
+  Future<void> _handleRegister() async {
+    final name = _nameController.text.trim();
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+    final confirmPassword = _confirmPasswordController.text;
+    final referralCode = _referralController.text.trim();
+
+    if (name.isEmpty || email.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Please fill in all required fields'),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    if (password != confirmPassword) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Passwords do not match'),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    if (password.length < 8) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Password must be at least 8 characters'),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    final authProvider = context.read<AuthProvider>();
+    final success = await authProvider.register(
+      email: email,
+      password: password,
+      fullName: name,
+      referralCode: referralCode.isNotEmpty ? referralCode : null,
+    );
+
+    if (!mounted) return;
+
+    if (success) {
+      if (authProvider.pendingVerificationEmail != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Please check your email for verification code'),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        // TODO: Navigate to email verification screen
+        context.go(AppRoutes.login);
+      } else {
+        context.go(AppRoutes.home);
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(authProvider.error ?? 'Registration failed'),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   Widget _buildSleekInput({
@@ -360,7 +437,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                 // Create Account Button
                 GestureDetector(
-                  onTap: _agreeToTerms ? () => context.go(AppRoutes.home) : null,
+                  onTap: _agreeToTerms ? _handleRegister : null,
                   child: Container(
                     width: contentWidth,
                     height: 44,
