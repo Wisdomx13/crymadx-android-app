@@ -90,6 +90,7 @@ class AuthService {
     required String email,
     required String password,
     required String fullName,
+    String? phone,
     String? referralCode,
   }) async {
     final response = await _api.post(
@@ -97,9 +98,12 @@ class AuthService {
       data: {
         'email': email,
         'password': password,
-        'fullName': fullName,
+        'confirm_password': password,
+        'full_name': fullName,
+        'phone': phone ?? '',
+        'terms_accepted': true,
         if (referralCode != null && referralCode.isNotEmpty)
-          'referralCode': referralCode,
+          'referral_code': referralCode,
       },
     );
 
