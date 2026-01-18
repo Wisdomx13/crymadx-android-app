@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 import '../../theme/colors.dart';
 import '../../widgets/crypto_icon.dart';
 import '../../navigation/app_router.dart';
+import '../../services/wallet_service.dart';
+import '../../providers/balance_provider.dart';
 
 class CoinDetailScreen extends StatefulWidget {
   final String symbol;
@@ -26,14 +29,59 @@ class CoinDetailScreen extends StatefulWidget {
 
 class _CoinDetailScreenState extends State<CoinDetailScreen> {
   bool _hideBalance = false;
+  List<Transaction> _recentTransactions = [];
+  bool _loadingTransactions = false;
 
-  // Mock data for price change
-  double get _priceChange => 2.45;
-  double get _price => widget.valueUsd / widget.amount;
+  // Get balance breakdown from provider
+  double _availableBalance = 0;
+  double _lockedBalance = 0;
+  double _price = 0;
 
-  // Mock balance breakdown
-  double get _availableBalance => widget.amount * 0.85;
-  double get _lockedBalance => widget.amount * 0.15;
+  @override
+  void initState() {
+    super.initState();
+    _loadBalanceDetails();
+    _loadRecentTransactions();
+  }
+
+  void _loadBalanceDetails() {
+    final balanceProvider = context.read<BalanceProvider>();
+    final assets = widget.accountType == 'funding'
+        ? balanceProvider.fundingAssets
+        : balanceProvider.tradingAssets;
+
+    final asset = assets.where((a) => a.symbol == widget.symbol).firstOrNull;
+    if (asset != null) {
+      _availableBalance = asset.available;
+      _lockedBalance = asset.locked;
+      _price = asset.price;
+    } else {
+      // Fallback to calculating from passed values
+      _availableBalance = widget.amount;
+      _lockedBalance = 0;
+      _price = widget.amount > 0 ? widget.valueUsd / widget.amount : 0;
+    }
+  }
+
+  Future<void> _loadRecentTransactions() async {
+    setState(() => _loadingTransactions = true);
+    try {
+      final transactions = await walletService.getTransfers(
+        currency: widget.symbol,
+        limit: 5,
+      );
+      if (mounted) {
+        setState(() {
+          _recentTransactions = transactions;
+          _loadingTransactions = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loadingTransactions = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -278,7 +326,7 @@ class _CoinDetailScreenState extends State<CoinDetailScreen> {
           _buildBalanceRow(
             'Available',
             _hideBalance ? '****' : '${_availableBalance.toStringAsFixed(widget.amount < 1 ? 6 : 4)} ${widget.symbol}',
-            _hideBalance ? '' : '\$${(_availableBalance * _price / widget.amount * widget.amount).toStringAsFixed(2)}',
+            _hideBalance ? '' : '\$${(_availableBalance * _price).toStringAsFixed(2)}',
           ),
           const SizedBox(height: 12),
           Divider(color: Colors.grey[900], height: 1),
@@ -286,7 +334,7 @@ class _CoinDetailScreenState extends State<CoinDetailScreen> {
           _buildBalanceRow(
             'In Orders',
             _hideBalance ? '****' : '${_lockedBalance.toStringAsFixed(widget.amount < 1 ? 6 : 4)} ${widget.symbol}',
-            _hideBalance ? '' : '\$${(_lockedBalance * _price / widget.amount * widget.amount).toStringAsFixed(2)}',
+            _hideBalance ? '' : '\$${(_lockedBalance * _price).toStringAsFixed(2)}',
           ),
           const SizedBox(height: 12),
           Divider(color: Colors.grey[900], height: 1),
@@ -340,8 +388,6 @@ class _CoinDetailScreenState extends State<CoinDetailScreen> {
   }
 
   Widget _buildPriceInfo() {
-    final isPositive = _priceChange >= 0;
-
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -352,7 +398,7 @@ class _CoinDetailScreenState extends State<CoinDetailScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Market Info',
+            'Price Info',
             style: TextStyle(
               color: Colors.grey[400],
               fontSize: 13,
@@ -384,21 +430,17 @@ class _CoinDetailScreenState extends State<CoinDetailScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: (isPositive ? AppColors.tradingBuy : AppColors.tradingSell).withOpacity(0.15),
+                  color: AppColors.primary.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
                   children: [
-                    Icon(
-                      isPositive ? Icons.trending_up : Icons.trending_down,
-                      color: isPositive ? AppColors.tradingBuy : AppColors.tradingSell,
-                      size: 16,
-                    ),
-                    const SizedBox(width: 4),
+                    CryptoIcon(symbol: widget.symbol, size: 16),
+                    const SizedBox(width: 6),
                     Text(
-                      '${isPositive ? '+' : ''}${_priceChange.toStringAsFixed(2)}%',
+                      widget.symbol,
                       style: TextStyle(
-                        color: isPositive ? AppColors.tradingBuy : AppColors.tradingSell,
+                        color: AppColors.primary,
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                       ),
@@ -412,15 +454,15 @@ class _CoinDetailScreenState extends State<CoinDetailScreen> {
           Row(
             children: [
               Expanded(
-                child: _buildMarketInfoItem('24h High', '\$${(_price * 1.05).toStringAsFixed(2)}'),
+                child: _buildMarketInfoItem('Your Holdings', '${widget.amount.toStringAsFixed(4)}'),
               ),
               const SizedBox(width: 16),
               Expanded(
-                child: _buildMarketInfoItem('24h Low', '\$${(_price * 0.95).toStringAsFixed(2)}'),
+                child: _buildMarketInfoItem('USD Value', '\$${widget.valueUsd.toStringAsFixed(2)}'),
               ),
               const SizedBox(width: 16),
               Expanded(
-                child: _buildMarketInfoItem('24h Vol', '${(widget.valueUsd * 1000).toStringAsFixed(0)}'),
+                child: _buildMarketInfoItem('Account', widget.accountType == 'funding' ? 'Funding' : 'Trading'),
               ),
             ],
           ),
@@ -482,14 +524,57 @@ class _CoinDetailScreenState extends State<CoinDetailScreen> {
             ),
           ),
           Divider(color: Colors.grey[900], height: 1),
-          _buildTransactionItem('Deposit', '+0.025 ${widget.symbol}', 'Today, 10:30 AM', true),
-          Divider(color: Colors.grey[900], height: 1),
-          _buildTransactionItem('Transfer Out', '-0.010 ${widget.symbol}', 'Yesterday, 2:15 PM', false),
-          Divider(color: Colors.grey[900], height: 1),
-          _buildTransactionItem('Buy', '+0.050 ${widget.symbol}', 'Dec 28, 9:00 AM', true),
+          if (_loadingTransactions)
+            const Padding(
+              padding: EdgeInsets.all(24),
+              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+            )
+          else if (_recentTransactions.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                children: [
+                  Icon(Icons.receipt_long_outlined, size: 32, color: Colors.grey[600]),
+                  const SizedBox(height: 8),
+                  Text(
+                    'No transactions yet',
+                    style: TextStyle(color: Colors.grey[500], fontSize: 13),
+                  ),
+                ],
+              ),
+            )
+          else
+            ...(_recentTransactions.map((tx) {
+              final isDeposit = tx.type.toLowerCase() == 'deposit';
+              final typeLabel = tx.type.substring(0, 1).toUpperCase() + tx.type.substring(1);
+              final amount = '${isDeposit ? '+' : '-'}${tx.amount.toStringAsFixed(4)} ${tx.currency}';
+              final time = _formatTime(tx.createdAt);
+              return Column(
+                children: [
+                  _buildTransactionItem(typeLabel, amount, time, isDeposit),
+                  if (_recentTransactions.last != tx)
+                    Divider(color: Colors.grey[900], height: 1),
+                ],
+              );
+            })),
         ],
       ),
     );
+  }
+
+  String _formatTime(DateTime date) {
+    final now = DateTime.now();
+    final diff = now.difference(date);
+
+    if (diff.inMinutes < 60) {
+      return '${diff.inMinutes}m ago';
+    } else if (diff.inHours < 24) {
+      return '${diff.inHours}h ago';
+    } else if (diff.inDays < 7) {
+      return '${diff.inDays}d ago';
+    } else {
+      return '${date.day}/${date.month}/${date.year}';
+    }
   }
 
   Widget _buildTransactionItem(String type, String amount, String time, bool isPositive) {

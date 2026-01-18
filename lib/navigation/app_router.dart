@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../screens/splash/splash_screen.dart';
 import '../screens/auth/login_screen.dart';
 import '../screens/auth/register_screen.dart';
+import '../screens/auth/verify_email_screen.dart';
 import '../screens/main/main_screen.dart';
 import '../screens/main/home_screen.dart';
 import '../screens/main/markets_screen.dart';
@@ -34,6 +35,7 @@ class AppRoutes {
   static const String splash = '/';
   static const String login = '/login';
   static const String register = '/register';
+  static const String verifyEmail = '/verify-email';
   static const String main = '/main';
   static const String home = '/main/home';
   static const String markets = '/main/markets';
@@ -82,6 +84,13 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: AppRoutes.register,
       builder: (context, state) => const RegisterScreen(),
+    ),
+    GoRoute(
+      path: AppRoutes.verifyEmail,
+      builder: (context, state) {
+        final email = state.extra as String? ?? '';
+        return VerifyEmailScreen(email: email);
+      },
     ),
 
     // Main with bottom navigation

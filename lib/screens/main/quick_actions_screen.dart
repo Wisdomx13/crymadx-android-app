@@ -207,8 +207,8 @@ class QuickActionsScreen extends StatelessWidget {
   }
 
   Widget _buildActionCard(_QuickAction action, bool isDark) {
-    final textColor = isDark ? Colors.white : const Color(0xFF000000);
-    final iconBgColor = isDark ? const Color(0xFF1A1A1A) : const Color(0xFFF0F0F0);
+    final textColor = isDark ? Colors.grey[400] : const Color(0xFF000000);
+    final iconColor = isDark ? Colors.white : const Color(0xFF000000);
 
     return Builder(
       builder: (context) => GestureDetector(
@@ -222,11 +222,25 @@ class QuickActionsScreen extends StatelessWidget {
                 width: 52,
                 height: 52,
                 decoration: BoxDecoration(
-                  color: iconBgColor,
-                  borderRadius: BorderRadius.circular(14),
-                  border: isDark ? null : Border.all(color: Colors.grey[300]!),
+                  color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: isDark
+                        ? Colors.white.withOpacity(0.08)
+                        : const Color(0xFF000000).withOpacity(0.12),
+                    width: isDark ? 1 : 1.5,
+                  ),
+                  boxShadow: isDark
+                      ? null
+                      : [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.06),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
                 ),
-                child: Icon(action.icon, color: action.color, size: 24),
+                child: Icon(action.icon, color: iconColor, size: 24),
               ),
               const SizedBox(height: 8),
               Text(
@@ -234,7 +248,7 @@ class QuickActionsScreen extends StatelessWidget {
                 style: TextStyle(
                   color: textColor,
                   fontSize: 11,
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.w600,
                 ),
                 textAlign: TextAlign.center,
                 maxLines: 2,

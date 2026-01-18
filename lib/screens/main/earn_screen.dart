@@ -15,29 +15,10 @@ class _EarnScreenState extends State<EarnScreen> with SingleTickerProviderStateM
   late TabController _tabController;
   int _selectedTab = 0;
 
-  final List<EarnProduct> _flexibleProducts = [
-    EarnProduct(symbol: 'USDT', name: 'Tether', apy: 3.5, minAmount: 10, tierApy: {'0-1000': 3.5, '1000-10000': 4.0, '10000+': 4.5}, isFlexible: true),
-    EarnProduct(symbol: 'USDC', name: 'USD Coin', apy: 3.2, minAmount: 10, tierApy: {'0-1000': 3.2, '1000-10000': 3.8, '10000+': 4.2}, isFlexible: true),
-    EarnProduct(symbol: 'BTC', name: 'Bitcoin', apy: 1.2, minAmount: 0.0001, tierApy: {'0-0.1': 1.2, '0.1-1': 1.5, '1+': 1.8}, isFlexible: true),
-    EarnProduct(symbol: 'ETH', name: 'Ethereum', apy: 2.0, minAmount: 0.01, tierApy: {'0-1': 2.0, '1-10': 2.5, '10+': 3.0}, isFlexible: true),
-    EarnProduct(symbol: 'BNB', name: 'BNB', apy: 1.8, minAmount: 0.1, tierApy: {'0-10': 1.8, '10-100': 2.2, '100+': 2.5}, isFlexible: true),
-    EarnProduct(symbol: 'SOL', name: 'Solana', apy: 4.5, minAmount: 0.1, tierApy: {'0-10': 4.5, '10-100': 5.0, '100+': 5.5}, isFlexible: true),
-  ];
-
-  final List<EarnProduct> _lockedProducts = [
-    EarnProduct(symbol: 'USDT', name: 'Tether', apy: 8.0, minAmount: 100, duration: 30, isFlexible: false),
-    EarnProduct(symbol: 'USDT', name: 'Tether', apy: 10.0, minAmount: 100, duration: 60, isFlexible: false),
-    EarnProduct(symbol: 'USDT', name: 'Tether', apy: 12.0, minAmount: 100, duration: 90, isFlexible: false),
-    EarnProduct(symbol: 'BTC', name: 'Bitcoin', apy: 3.5, minAmount: 0.001, duration: 30, isFlexible: false),
-    EarnProduct(symbol: 'BTC', name: 'Bitcoin', apy: 4.5, minAmount: 0.001, duration: 60, isFlexible: false),
-    EarnProduct(symbol: 'BTC', name: 'Bitcoin', apy: 5.5, minAmount: 0.001, duration: 90, isFlexible: false),
-    EarnProduct(symbol: 'ETH', name: 'Ethereum', apy: 4.0, minAmount: 0.01, duration: 30, isFlexible: false),
-    EarnProduct(symbol: 'ETH', name: 'Ethereum', apy: 5.0, minAmount: 0.01, duration: 60, isFlexible: false),
-    EarnProduct(symbol: 'ETH', name: 'Ethereum', apy: 6.0, minAmount: 0.01, duration: 90, isFlexible: false),
-    EarnProduct(symbol: 'SOL', name: 'Solana', apy: 7.0, minAmount: 1, duration: 30, isFlexible: false),
-    EarnProduct(symbol: 'SOL', name: 'Solana', apy: 8.5, minAmount: 1, duration: 60, isFlexible: false),
-    EarnProduct(symbol: 'SOL', name: 'Solana', apy: 10.0, minAmount: 1, duration: 90, isFlexible: false),
-  ];
+  // Staking products will be fetched from backend when API is available
+  // For now, show empty lists - no hardcoded fake APY rates
+  final List<EarnProduct> _flexibleProducts = [];
+  final List<EarnProduct> _lockedProducts = [];
 
   @override
   void initState() {
@@ -194,6 +175,9 @@ class _EarnScreenState extends State<EarnScreen> with SingleTickerProviderStateM
   }
 
   Widget _buildFlexibleList() {
+    if (_flexibleProducts.isEmpty) {
+      return _buildComingSoon();
+    }
     return ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: _flexibleProducts.length,
@@ -205,6 +189,9 @@ class _EarnScreenState extends State<EarnScreen> with SingleTickerProviderStateM
   }
 
   Widget _buildLockedList() {
+    if (_lockedProducts.isEmpty) {
+      return _buildComingSoon();
+    }
     // Group by symbol
     final grouped = <String, List<EarnProduct>>{};
     for (var p in _lockedProducts) {
@@ -218,6 +205,30 @@ class _EarnScreenState extends State<EarnScreen> with SingleTickerProviderStateM
         products: entry.value,
         onStake: (product) => _showStakeDialog(product),
       )).toList(),
+    );
+  }
+
+  Widget _buildComingSoon() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1A1A1A),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.rocket_launch_outlined, color: AppColors.primary, size: 48),
+          ),
+          const SizedBox(height: 16),
+          Text('Coming Soon', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          Text('Staking products will be available soon', style: TextStyle(color: Colors.grey[500], fontSize: 13)),
+          const SizedBox(height: 4),
+          Text('Stay tuned for exciting earning opportunities!', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+        ],
+      ),
     );
   }
 

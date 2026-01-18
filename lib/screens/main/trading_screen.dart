@@ -3,10 +3,13 @@ import 'dart:async';
 import 'dart:math';
 import 'package:dio/dio.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 import '../../widgets/widgets.dart';
 import '../../navigation/app_router.dart';
 import '../../theme/colors.dart';
 import '../../services/crypto_service.dart';
+import '../../providers/balance_provider.dart';
+import 'order_entry_screen.dart';
 
 /// Professional Bybit-style Spot Trading Screen
 class TradingScreen extends StatefulWidget {
@@ -93,6 +96,7 @@ class _TradingScreenState extends State<TradingScreen> with TickerProviderStateM
   double _toPrice = 91000.0;
   double _toAmount = 0.0;
   bool _isConverting = false;
+  double _availableBalance = 0.0;
 
   final List<Map<String, dynamic>> _cryptoOptions = [
     {'symbol': 'BTC', 'name': 'Bitcoin'},
@@ -157,7 +161,25 @@ class _TradingScreenState extends State<TradingScreen> with TickerProviderStateM
       _fetchOrderBook(),
       _fetchRecentTrades(),
     ]);
+    _loadConvertBalance();
     setState(() => _isLoading = false);
+  }
+
+  void _loadConvertBalance() {
+    final balanceProvider = context.read<BalanceProvider>();
+    final asset = balanceProvider.fundingAssets
+        .where((a) => a.symbol.toUpperCase() == _fromCrypto.toUpperCase())
+        .firstOrNull;
+    setState(() {
+      _availableBalance = asset?.available ?? 0.0;
+    });
+  }
+
+  void _setMaxConvertAmount() {
+    if (_availableBalance > 0) {
+      _fromAmountController.text = _availableBalance.toString();
+      _calculateConvertAmount();
+    }
   }
 
   Future<void> _fetchAllSymbols() async {
@@ -1402,208 +1424,17 @@ class _TradingScreenState extends State<TradingScreen> with TickerProviderStateM
   }
 
   void _showTradeSheet(bool isBuy) {
-    final priceController = TextEditingController(text: _formatPrice(_lastPrice));
-    final amountController = TextEditingController();
-    String orderType = 'Limit';
-    double sliderValue = 0;
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setModalState) {
-          final buttonColor = isBuy ? const Color(0xFF00C853) : const Color(0xFFFF5252);
-
-          return Container(
-            padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-            decoration: const BoxDecoration(
-              color: Color(0xFF1A1A1A),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 40, height: 4,
-                  margin: const EdgeInsets.only(top: 12, bottom: 8),
-                  decoration: BoxDecoration(color: Colors.grey[700], borderRadius: BorderRadius.circular(2)),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: Row(
-                    children: [
-                      CryptoIcon(symbol: _baseAsset, size: 28),
-                      const SizedBox(width: 8),
-                      Text(
-                        '${isBuy ? 'Buy' : 'Sell'} $_baseAsset',
-                        style: TextStyle(color: buttonColor, fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                      const Spacer(),
-                      GestureDetector(
-                        onTap: () => Navigator.pop(context),
-                        child: const Icon(Icons.close, color: Colors.grey, size: 24),
-                      ),
-                    ],
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: Row(
-                    children: ['Limit', 'Market', 'Stop'].map((type) {
-                      final isSelected = orderType == type;
-                      return GestureDetector(
-                        onTap: () => setModalState(() => orderType = type),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          margin: const EdgeInsets.only(right: 8),
-                          decoration: BoxDecoration(
-                            color: isSelected ? buttonColor.withOpacity(0.15) : const Color(0xFF0D0D0D),
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: isSelected ? buttonColor : Colors.transparent),
-                          ),
-                          child: Text(
-                            type,
-                            style: TextStyle(
-                              color: isSelected ? buttonColor : Colors.grey,
-                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ),
-                if (orderType != 'Market')
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF0D0D0D),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: TextField(
-                        controller: priceController,
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        style: const TextStyle(color: Colors.white, fontSize: 16, fontFamily: 'monospace'),
-                        decoration: InputDecoration(
-                          labelText: 'Price (USDT)',
-                          labelStyle: TextStyle(color: Colors.grey[600], fontSize: 12),
-                          border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-                        ),
-                      ),
-                    ),
-                  ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF0D0D0D),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: TextField(
-                      controller: amountController,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      style: const TextStyle(color: Colors.white, fontSize: 16, fontFamily: 'monospace'),
-                      decoration: InputDecoration(
-                        labelText: 'Amount ($_baseAsset)',
-                        labelStyle: TextStyle(color: Colors.grey[600], fontSize: 12),
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-                        hintText: '0.00',
-                        hintStyle: TextStyle(color: Colors.grey[700]),
-                      ),
-                    ),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: Row(
-                    children: [25, 50, 75, 100].map((p) {
-                      final isSelected = sliderValue == p;
-                      return Expanded(
-                        child: GestureDetector(
-                          onTap: () => setModalState(() => sliderValue = p.toDouble()),
-                          child: Container(
-                            margin: const EdgeInsets.only(right: 6),
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF0D0D0D),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: isSelected ? buttonColor : Colors.grey[800]!),
-                            ),
-                            child: Center(
-                              child: Text(
-                                '$p%',
-                                style: TextStyle(
-                                  color: isSelected ? buttonColor : Colors.grey,
-                                  fontSize: 12,
-                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: Column(
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('Available', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
-                          Text(isBuy ? '10,000.00 USDT' : '0.5 $_baseAsset', style: const TextStyle(color: Colors.white, fontSize: 12)),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('Total', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
-                          const Text('0.00 USDT', style: TextStyle(color: Colors.white, fontSize: 12)),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('${isBuy ? 'Buy' : 'Sell'} order placed!'),
-                            backgroundColor: buttonColor,
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: buttonColor,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
-                      child: Text(
-                        '${isBuy ? 'Buy' : 'Sell'} $_baseAsset',
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
-                      ),
-                    ),
-                  ),
-                ),
-                SizedBox(height: MediaQuery.of(context).padding.bottom),
-              ],
-            ),
-          );
-        },
+    // Navigate to full-screen order entry screen
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => OrderEntryScreen(
+          symbol: _symbol,
+          baseAsset: _baseAsset,
+          quoteAsset: _quoteAsset,
+          isBuy: isBuy,
+          currentPrice: _lastPrice,
+        ),
       ),
     );
   }
@@ -1859,7 +1690,29 @@ class _TradingScreenState extends State<TradingScreen> with TickerProviderStateM
               Row(
                 children: [
                   Text('Available: ', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
-                  Text('0', style: TextStyle(color: Colors.grey[400], fontSize: 12)),
+                  Text(
+                    _availableBalance > 0 ? _availableBalance.toStringAsFixed(8) : '0',
+                    style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                  ),
+                  const SizedBox(width: 8),
+                  GestureDetector(
+                    onTap: _setMaxConvertAmount,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: AppColors.tradingBuy.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        'Max',
+                        style: TextStyle(
+                          color: AppColors.tradingBuy,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ],
@@ -1972,6 +1825,8 @@ class _TradingScreenState extends State<TradingScreen> with TickerProviderStateM
       _toCrypto = tempCrypto;
       _toPrice = tempPrice;
     });
+    // Reload balance for the new "From" currency
+    _loadConvertBalance();
     _calculateConvertAmount();
   }
 
@@ -2031,6 +1886,18 @@ class _TradingScreenState extends State<TradingScreen> with TickerProviderStateM
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please enter an amount'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    // Balance validation
+    if (fromAmount > _availableBalance) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Insufficient balance. Available: $_availableBalance $_fromCrypto'),
           backgroundColor: Colors.red,
           behavior: SnackBarBehavior.floating,
         ),
@@ -2346,6 +2213,10 @@ class _TradingScreenState extends State<TradingScreen> with TickerProviderStateM
                     _toPrice = price ?? (crypto['symbol'] == 'USDT' ? 1.0 : 1000.0);
                   }
                 });
+                // Reload balance when "From" crypto changes
+                if (isFrom) {
+                  _loadConvertBalance();
+                }
                 _calculateConvertAmount();
               },
             ))),

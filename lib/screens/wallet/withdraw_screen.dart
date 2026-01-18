@@ -1,33 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 import '../../theme/colors.dart';
 import '../../theme/typography.dart';
 import '../../theme/spacing.dart';
 import '../../widgets/crypto_icon.dart';
 import '../../widgets/app_button.dart';
+import '../../providers/balance_provider.dart';
 
-// Mock balances for withdrawal
-class WithdrawableAsset {
-  final String symbol;
-  final String name;
-  final double available;
-  final double locked;
-  final double usdValue;
-  final List<NetworkInfo> networks;
-
-  const WithdrawableAsset({
-    required this.symbol,
-    required this.name,
-    required this.available,
-    required this.locked,
-    required this.usdValue,
-    required this.networks,
-  });
-
-  double get total => available + locked;
-}
-
+// Network info for withdrawals (static config - can be fetched from API later)
 class NetworkInfo {
   final String name;
   final String shortName;
@@ -44,76 +26,33 @@ class NetworkInfo {
   });
 }
 
-final withdrawableAssets = [
-  WithdrawableAsset(
-    symbol: 'BTC',
-    name: 'Bitcoin',
-    available: 0.0542,
-    locked: 0.0,
-    usdValue: 5124.56,
-    networks: [
+// Network configurations per currency
+List<NetworkInfo> _getNetworksForCurrency(String symbol) {
+  const Map<String, List<NetworkInfo>> networkConfigs = {
+    'BTC': [
       NetworkInfo(name: 'Bitcoin Network', shortName: 'BTC', fee: 0.0001, minWithdraw: 0.0002, estimatedTime: '~30 min'),
-      NetworkInfo(name: 'BNB Smart Chain', shortName: 'BEP20', fee: 0.000001, minWithdraw: 0.00001, estimatedTime: '~5 min'),
     ],
-  ),
-  WithdrawableAsset(
-    symbol: 'ETH',
-    name: 'Ethereum',
-    available: 1.2450,
-    locked: 0.0,
-    usdValue: 4234.15,
-    networks: [
+    'ETH': [
       NetworkInfo(name: 'Ethereum Network', shortName: 'ERC20', fee: 0.005, minWithdraw: 0.01, estimatedTime: '~10 min'),
-      NetworkInfo(name: 'BNB Smart Chain', shortName: 'BEP20', fee: 0.0001, minWithdraw: 0.001, estimatedTime: '~5 min'),
       NetworkInfo(name: 'Arbitrum One', shortName: 'ARB', fee: 0.0002, minWithdraw: 0.001, estimatedTime: '~2 min'),
     ],
-  ),
-  WithdrawableAsset(
-    symbol: 'USDT',
-    name: 'Tether',
-    available: 2500.00,
-    locked: 500.00,
-    usdValue: 2500.00,
-    networks: [
+    'USDT': [
       NetworkInfo(name: 'Ethereum Network', shortName: 'ERC20', fee: 15.0, minWithdraw: 50.0, estimatedTime: '~10 min'),
       NetworkInfo(name: 'Tron Network', shortName: 'TRC20', fee: 1.0, minWithdraw: 10.0, estimatedTime: '~3 min'),
-      NetworkInfo(name: 'BNB Smart Chain', shortName: 'BEP20', fee: 0.5, minWithdraw: 10.0, estimatedTime: '~5 min'),
     ],
-  ),
-  WithdrawableAsset(
-    symbol: 'USDC',
-    name: 'USD Coin',
-    available: 1850.00,
-    locked: 0.0,
-    usdValue: 1850.00,
-    networks: [
+    'USDC': [
       NetworkInfo(name: 'Ethereum Network', shortName: 'ERC20', fee: 12.0, minWithdraw: 50.0, estimatedTime: '~10 min'),
-      NetworkInfo(name: 'BNB Smart Chain', shortName: 'BEP20', fee: 0.5, minWithdraw: 10.0, estimatedTime: '~5 min'),
       NetworkInfo(name: 'Polygon Network', shortName: 'MATIC', fee: 0.1, minWithdraw: 5.0, estimatedTime: '~2 min'),
     ],
-  ),
-  WithdrawableAsset(
-    symbol: 'BNB',
-    name: 'BNB',
-    available: 3.5,
-    locked: 0.0,
-    usdValue: 2100.00,
-    networks: [
-      NetworkInfo(name: 'BNB Smart Chain', shortName: 'BEP20', fee: 0.0005, minWithdraw: 0.01, estimatedTime: '~5 min'),
-      NetworkInfo(name: 'BNB Beacon Chain', shortName: 'BEP2', fee: 0.001, minWithdraw: 0.01, estimatedTime: '~5 min'),
-    ],
-  ),
-  WithdrawableAsset(
-    symbol: 'SOL',
-    name: 'Solana',
-    available: 25.0,
-    locked: 0.0,
-    usdValue: 3750.00,
-    networks: [
+    'SOL': [
       NetworkInfo(name: 'Solana Network', shortName: 'SOL', fee: 0.01, minWithdraw: 0.1, estimatedTime: '~2 min'),
     ],
-  ),
-];
+  };
+  // Default network if currency not in config
+  return networkConfigs[symbol.toUpperCase()] ?? [
+    NetworkInfo(name: '$symbol Network', shortName: symbol, fee: 0.001, minWithdraw: 0.01, estimatedTime: '~10 min'),
+  ];
+}
 
 class WithdrawScreen extends StatefulWidget {
   final String? initialSymbol;
@@ -130,7 +69,7 @@ class WithdrawScreen extends StatefulWidget {
 }
 
 class _WithdrawScreenState extends State<WithdrawScreen> {
-  WithdrawableAsset? _selectedAsset;
+  AssetBalance? _selectedAsset;
   NetworkInfo? _selectedNetwork;
   final _addressController = TextEditingController();
   final _amountController = TextEditingController();
@@ -141,18 +80,32 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
   @override
   void initState() {
     super.initState();
-    // Set initial asset if provided, otherwise default to first asset
+    // Set initial asset after build (to access provider)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializeSelectedAsset();
+    });
+  }
+
+  void _initializeSelectedAsset() {
+    final balanceProvider = context.read<BalanceProvider>();
+    final assets = balanceProvider.fundingAssets;
+
+    if (assets.isEmpty) return;
+
     if (widget.initialSymbol != null) {
-      _selectedAsset = withdrawableAssets.firstWhere(
+      final found = assets.where(
         (asset) => asset.symbol.toUpperCase() == widget.initialSymbol!.toUpperCase(),
-        orElse: () => withdrawableAssets.first,
       );
+      _selectedAsset = found.isNotEmpty ? found.first : assets.first;
     } else {
-      _selectedAsset = withdrawableAssets.first;
+      _selectedAsset = assets.first;
     }
-    if (_selectedAsset!.networks.isNotEmpty) {
-      _selectedNetwork = _selectedAsset!.networks.first;
+
+    final networks = _getNetworksForCurrency(_selectedAsset!.symbol);
+    if (networks.isNotEmpty) {
+      _selectedNetwork = networks.first;
     }
+    setState(() {});
   }
 
   double get _withdrawAmount {
@@ -182,10 +135,11 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
     super.dispose();
   }
 
-  void _selectAsset(WithdrawableAsset asset) {
+  void _selectAsset(AssetBalance asset) {
+    final networks = _getNetworksForCurrency(asset.symbol);
     setState(() {
       _selectedAsset = asset;
-      _selectedNetwork = asset.networks.first;
+      _selectedNetwork = networks.isNotEmpty ? networks.first : null;
       _amountController.clear();
     });
     Navigator.pop(context);
@@ -424,10 +378,11 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
   Widget _buildNetworkSelector() {
     if (_selectedAsset == null) return const SizedBox.shrink();
 
+    final networks = _getNetworksForCurrency(_selectedAsset!.symbol);
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
-        children: _selectedAsset!.networks.map((network) {
+        children: networks.map((network) {
           final isSelected = _selectedNetwork?.name == network.name;
           return GestureDetector(
             onTap: () => _selectNetwork(network),
@@ -711,7 +666,9 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
   Widget _buildCoinSelectorSheet() {
     return StatefulBuilder(
       builder: (context, setSheetState) {
-        final filteredAssets = withdrawableAssets.where((asset) {
+        final balanceProvider = context.watch<BalanceProvider>();
+        final allAssets = balanceProvider.fundingAssets;
+        final filteredAssets = allAssets.where((asset) {
           if (_searchQuery.isEmpty) return true;
           return asset.symbol.toLowerCase().contains(_searchQuery.toLowerCase()) ||
               asset.name.toLowerCase().contains(_searchQuery.toLowerCase());
@@ -784,80 +741,99 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
               const SizedBox(height: 16),
               // Coin list
               Expanded(
-                child: ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: filteredAssets.length,
-                  itemBuilder: (context, index) {
-                    final asset = filteredAssets[index];
-                    final isSelected = _selectedAsset?.symbol == asset.symbol;
-                    return GestureDetector(
-                      onTap: () => _selectAsset(asset),
-                      child: Container(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: isSelected ? AppColors.primary.withOpacity(0.1) : const Color(0xFF1A1A1A),
-                          borderRadius: BorderRadius.circular(12),
-                          border: isSelected
-                              ? Border.all(color: AppColors.primary.withOpacity(0.5))
-                              : null,
-                        ),
-                        child: Row(
+                child: filteredAssets.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            CryptoIcon(symbol: asset.symbol, size: 40),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                            Icon(Icons.account_balance_wallet_outlined, size: 48, color: AppColors.textTertiary),
+                            const SizedBox(height: 12),
+                            Text(
+                              'No assets available',
+                              style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Deposit crypto to get started',
+                              style: TextStyle(color: AppColors.textTertiary, fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        itemCount: filteredAssets.length,
+                        itemBuilder: (context, index) {
+                          final asset = filteredAssets[index];
+                          final isSelected = _selectedAsset?.symbol == asset.symbol;
+                          return GestureDetector(
+                            onTap: () => _selectAsset(asset),
+                            child: Container(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: isSelected ? AppColors.primary.withOpacity(0.1) : const Color(0xFF1A1A1A),
+                                borderRadius: BorderRadius.circular(12),
+                                border: isSelected
+                                    ? Border.all(color: AppColors.primary.withOpacity(0.5))
+                                    : null,
+                              ),
+                              child: Row(
                                 children: [
-                                  Text(
-                                    asset.symbol,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w600,
+                                  CryptoIcon(symbol: asset.symbol, size: 40),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          asset.symbol,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                        Text(
+                                          asset.name,
+                                          style: TextStyle(
+                                            color: AppColors.textTertiary,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                  Text(
-                                    asset.name,
-                                    style: TextStyle(
-                                      color: AppColors.textTertiary,
-                                      fontSize: 12,
-                                    ),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      Text(
+                                        '${asset.available}',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                      Text(
+                                        '\$${asset.valueUsd.toStringAsFixed(2)}',
+                                        style: TextStyle(
+                                          color: AppColors.textTertiary,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ],
                                   ),
+                                  if (isSelected) ...[
+                                    const SizedBox(width: 12),
+                                    Icon(Icons.check_circle, color: AppColors.primary, size: 20),
+                                  ],
                                 ],
                               ),
                             ),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Text(
-                                  '${asset.available}',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                                Text(
-                                  '\$${asset.usdValue.toStringAsFixed(2)}',
-                                  style: TextStyle(
-                                    color: AppColors.textTertiary,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            if (isSelected) ...[
-                              const SizedBox(width: 12),
-                              Icon(Icons.check_circle, color: AppColors.primary, size: 20),
-                            ],
-                          ],
-                        ),
+                          );
+                        },
                       ),
-                    );
-                  },
-                ),
               ),
             ],
           ),

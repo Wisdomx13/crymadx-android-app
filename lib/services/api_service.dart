@@ -340,8 +340,17 @@ class ApiService {
     if (error.response?.data != null) {
       final data = error.response!.data;
       if (data is Map<String, dynamic>) {
-        message = data['error'] ?? data['message'] ?? message;
-        code = data['code']?.toString();
+        // Handle nested error object: {error: {code, message}}
+        if (data['error'] is Map<String, dynamic>) {
+          final errorObj = data['error'] as Map<String, dynamic>;
+          message = errorObj['message'] ?? message;
+          code = errorObj['code']?.toString();
+        } else if (data['error'] is String) {
+          message = data['error'];
+        } else {
+          message = data['message'] ?? message;
+        }
+        code ??= data['code']?.toString();
       } else if (data is String) {
         message = data;
       }
@@ -353,7 +362,7 @@ class ApiService {
           message = 'Connection timeout. Please try again.';
           break;
         case DioExceptionType.connectionError:
-          message = 'No internet connection.';
+          message = 'Unable to connect to server. Please check your internet connection.';
           break;
         case DioExceptionType.cancel:
           message = 'Request cancelled.';
@@ -363,12 +372,60 @@ class ApiService {
       }
     }
 
+    // Map common error codes/messages to user-friendly messages
+    message = _mapErrorMessage(message, code, statusCode);
+
     return ApiError(
       message: message,
       statusCode: statusCode,
       data: error.response?.data,
       code: code,
     );
+  }
+
+  /// Map error codes and messages to user-friendly messages
+  String _mapErrorMessage(String message, String? code, int? statusCode) {
+    final lowerMessage = message.toLowerCase();
+    final lowerCode = code?.toLowerCase() ?? '';
+
+    // Duplicate email
+    if (lowerMessage.contains('already exist') ||
+        lowerMessage.contains('already registered') ||
+        lowerMessage.contains('duplicate') ||
+        lowerCode.contains('duplicate') ||
+        lowerCode.contains('conflict') ||
+        (statusCode == 409)) {
+      return 'This email is already registered. Please sign in or use a different email.';
+    }
+
+    // Email not verified
+    if (lowerMessage.contains('not verified') ||
+        lowerMessage.contains('verify your email') ||
+        lowerCode.contains('unverified')) {
+      return 'Email not verified. Please check your email for verification code.';
+    }
+
+    // Invalid credentials
+    if (lowerMessage.contains('invalid credentials') ||
+        lowerMessage.contains('invalid password') ||
+        lowerMessage.contains('wrong password') ||
+        lowerCode.contains('invalid_credentials')) {
+      return 'Invalid email or password. Please try again.';
+    }
+
+    // User not found
+    if (lowerMessage.contains('user not found') ||
+        lowerMessage.contains('no user') ||
+        lowerCode.contains('user_not_found')) {
+      return 'No account found with this email. Please register first.';
+    }
+
+    // Internal server error
+    if (lowerMessage.contains('internal') && statusCode == 500) {
+      return 'Something went wrong. Please try again later.';
+    }
+
+    return message;
   }
 }
 

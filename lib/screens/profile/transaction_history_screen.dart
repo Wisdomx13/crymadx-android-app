@@ -5,144 +5,9 @@ import '../../theme/typography.dart';
 import '../../theme/spacing.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/crypto_icon.dart';
+import '../../services/wallet_service.dart';
 
-// Transaction types
-enum TransactionType { deposit, withdraw, trade, transfer, earn, p2p }
-
-// Transaction status
-enum TransactionStatus { completed, pending, failed, cancelled }
-
-// Transaction model
-class Transaction {
-  final String id;
-  final TransactionType type;
-  final TransactionStatus status;
-  final String asset;
-  final double amount;
-  final double? usdValue;
-  final DateTime timestamp;
-  final String? description;
-  final String? txHash;
-
-  const Transaction({
-    required this.id,
-    required this.type,
-    required this.status,
-    required this.asset,
-    required this.amount,
-    this.usdValue,
-    required this.timestamp,
-    this.description,
-    this.txHash,
-  });
-}
-
-// Mock transaction data
-final List<Transaction> mockTransactions = [
-  Transaction(
-    id: 'TXN001',
-    type: TransactionType.deposit,
-    status: TransactionStatus.completed,
-    asset: 'USDT',
-    amount: 500.00,
-    usdValue: 500.00,
-    timestamp: DateTime.now().subtract(const Duration(hours: 2)),
-    description: 'Deposit via TRC20',
-    txHash: '0x1a2b3c4d5e6f7890...',
-  ),
-  Transaction(
-    id: 'TXN002',
-    type: TransactionType.trade,
-    status: TransactionStatus.completed,
-    asset: 'BTC',
-    amount: 0.012,
-    usdValue: 518.40,
-    timestamp: DateTime.now().subtract(const Duration(hours: 5)),
-    description: 'Buy BTC/USDT',
-  ),
-  Transaction(
-    id: 'TXN003',
-    type: TransactionType.withdraw,
-    status: TransactionStatus.pending,
-    asset: 'ETH',
-    amount: 0.5,
-    usdValue: 1140.00,
-    timestamp: DateTime.now().subtract(const Duration(hours: 8)),
-    description: 'Withdraw to external wallet',
-    txHash: '0xabc123def456...',
-  ),
-  Transaction(
-    id: 'TXN004',
-    type: TransactionType.earn,
-    status: TransactionStatus.completed,
-    asset: 'USDT',
-    amount: 12.50,
-    usdValue: 12.50,
-    timestamp: DateTime.now().subtract(const Duration(days: 1)),
-    description: 'Staking rewards',
-  ),
-  Transaction(
-    id: 'TXN005',
-    type: TransactionType.p2p,
-    status: TransactionStatus.completed,
-    asset: 'USDT',
-    amount: 200.00,
-    usdValue: 200.00,
-    timestamp: DateTime.now().subtract(const Duration(days: 1, hours: 6)),
-    description: 'P2P Buy from User123',
-  ),
-  Transaction(
-    id: 'TXN006',
-    type: TransactionType.transfer,
-    status: TransactionStatus.completed,
-    asset: 'BNB',
-    amount: 2.5,
-    usdValue: 781.25,
-    timestamp: DateTime.now().subtract(const Duration(days: 2)),
-    description: 'Transfer to Spot Wallet',
-  ),
-  Transaction(
-    id: 'TXN007',
-    type: TransactionType.trade,
-    status: TransactionStatus.failed,
-    asset: 'SOL',
-    amount: 10.0,
-    usdValue: 985.00,
-    timestamp: DateTime.now().subtract(const Duration(days: 3)),
-    description: 'Sell SOL/USDT - Insufficient balance',
-  ),
-  Transaction(
-    id: 'TXN008',
-    type: TransactionType.deposit,
-    status: TransactionStatus.completed,
-    asset: 'BTC',
-    amount: 0.05,
-    usdValue: 2160.00,
-    timestamp: DateTime.now().subtract(const Duration(days: 5)),
-    description: 'Deposit via Bitcoin Network',
-    txHash: '0x9f8e7d6c5b4a...',
-  ),
-  Transaction(
-    id: 'TXN009',
-    type: TransactionType.withdraw,
-    status: TransactionStatus.cancelled,
-    asset: 'USDT',
-    amount: 1000.00,
-    usdValue: 1000.00,
-    timestamp: DateTime.now().subtract(const Duration(days: 7)),
-    description: 'Withdraw cancelled by user',
-  ),
-  Transaction(
-    id: 'TXN010',
-    type: TransactionType.earn,
-    status: TransactionStatus.completed,
-    asset: 'ETH',
-    amount: 0.008,
-    usdValue: 18.24,
-    timestamp: DateTime.now().subtract(const Duration(days: 8)),
-    description: 'ETH Staking rewards',
-  ),
-];
+// Use the Transaction model from wallet_service.dart
 
 class TransactionHistoryScreen extends StatefulWidget {
   const TransactionHistoryScreen({super.key});
@@ -155,12 +20,21 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   String _selectedFilter = 'All';
-  final List<String> _filters = ['All', 'Deposit', 'Withdraw', 'Trade', 'Earn', 'P2P'];
+  final List<String> _filters = ['All', 'Deposit', 'Withdraw', 'Transfer'];
+
+  List<Transaction> _transactions = [];
+  bool _isLoading = true;
+  String? _error;
+
+  // Summary stats
+  double _totalDeposits = 0;
+  double _totalWithdrawals = 0;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
+    _loadTransactions();
   }
 
   @override
@@ -169,30 +43,50 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
     super.dispose();
   }
 
-  List<Transaction> get _filteredTransactions {
-    if (_selectedFilter == 'All') return mockTransactions;
+  Future<void> _loadTransactions() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
 
-    TransactionType? filterType;
-    switch (_selectedFilter) {
-      case 'Deposit':
-        filterType = TransactionType.deposit;
-        break;
-      case 'Withdraw':
-        filterType = TransactionType.withdraw;
-        break;
-      case 'Trade':
-        filterType = TransactionType.trade;
-        break;
-      case 'Earn':
-        filterType = TransactionType.earn;
-        break;
-      case 'P2P':
-        filterType = TransactionType.p2p;
-        break;
+    try {
+      final transactions = await walletService.getTransfers(limit: 50);
+
+      // Calculate summaries
+      double deposits = 0;
+      double withdrawals = 0;
+
+      for (var tx in transactions) {
+        if (tx.type.toLowerCase() == 'deposit' && tx.isCompleted) {
+          deposits += tx.amount;
+        } else if (tx.type.toLowerCase() == 'withdraw' && tx.isCompleted) {
+          withdrawals += tx.amount;
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _transactions = transactions;
+          _totalDeposits = deposits;
+          _totalWithdrawals = withdrawals;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = e.toString().replaceAll('Exception: ', '');
+          _isLoading = false;
+        });
+      }
     }
+  }
 
-    if (filterType == null) return mockTransactions;
-    return mockTransactions.where((t) => t.type == filterType).toList();
+  List<Transaction> get _filteredTransactions {
+    if (_selectedFilter == 'All') return _transactions;
+
+    final filterType = _selectedFilter.toLowerCase();
+    return _transactions.where((t) => t.type.toLowerCase() == filterType).toList();
   }
 
   @override
@@ -263,35 +157,42 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
             ),
           ),
 
-          // Summary card
+          // Summary card - real data
           Padding(
             padding: const EdgeInsets.all(AppSpacing.md),
             child: GlassCard(
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _buildSummaryItem('Total Deposits', '\$5,160', AppColors.tradingBuy),
+                  _buildSummaryItem('Total Deposits', '\$${_totalDeposits.toStringAsFixed(2)}', AppColors.tradingBuy),
                   Container(width: 1, height: 40, color: AppColors.glassBorder),
-                  _buildSummaryItem('Total Withdrawals', '\$2,140', AppColors.tradingSell),
+                  _buildSummaryItem('Total Withdrawals', '\$${_totalWithdrawals.toStringAsFixed(2)}', AppColors.tradingSell),
                   Container(width: 1, height: 40, color: AppColors.glassBorder),
-                  _buildSummaryItem('Net Flow', '+\$3,020', AppColors.info),
+                  _buildSummaryItem('Net Flow', '${_totalDeposits - _totalWithdrawals >= 0 ? '+' : ''}\$${(_totalDeposits - _totalWithdrawals).toStringAsFixed(2)}', AppColors.info),
                 ],
               ),
             ),
           ),
 
-          // Transaction list
+          // Transaction list - real data
           Expanded(
-            child: _filteredTransactions.isEmpty
-                ? _buildEmptyState()
-                : ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-                    itemCount: _filteredTransactions.length,
-                    itemBuilder: (context, index) {
-                      final tx = _filteredTransactions[index];
-                      return _buildTransactionItem(tx);
-                    },
-                  ),
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _error != null
+                    ? _buildErrorState()
+                    : _filteredTransactions.isEmpty
+                        ? _buildEmptyState()
+                        : RefreshIndicator(
+                            onRefresh: _loadTransactions,
+                            child: ListView.builder(
+                              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                              itemCount: _filteredTransactions.length,
+                              itemBuilder: (context, index) {
+                                final tx = _filteredTransactions[index];
+                                return _buildTransactionItem(tx);
+                              },
+                            ),
+                          ),
           ),
         ],
       ),
@@ -323,57 +224,49 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
     String typeLabel;
     bool isIncoming;
 
-    switch (tx.type) {
-      case TransactionType.deposit:
+    final txType = tx.type.toLowerCase();
+    switch (txType) {
+      case 'deposit':
         icon = Icons.arrow_downward;
         iconColor = AppColors.tradingBuy;
         typeLabel = 'Deposit';
         isIncoming = true;
         break;
-      case TransactionType.withdraw:
+      case 'withdraw':
+      case 'withdrawal':
         icon = Icons.arrow_upward;
         iconColor = AppColors.tradingSell;
         typeLabel = 'Withdraw';
         isIncoming = false;
         break;
-      case TransactionType.trade:
+      case 'transfer':
+      case 'internal':
         icon = Icons.swap_horiz;
-        iconColor = AppColors.info;
-        typeLabel = 'Trade';
-        isIncoming = tx.amount > 0;
-        break;
-      case TransactionType.transfer:
-        icon = Icons.send;
         iconColor = AppColors.warning;
         typeLabel = 'Transfer';
         isIncoming = false;
         break;
-      case TransactionType.earn:
-        icon = Icons.savings;
-        iconColor = AppColors.tradingBuy;
-        typeLabel = 'Earn';
-        isIncoming = true;
-        break;
-      case TransactionType.p2p:
-        icon = Icons.people;
-        iconColor = AppColors.primary;
-        typeLabel = 'P2P';
+      default:
+        icon = Icons.receipt;
+        iconColor = AppColors.info;
+        typeLabel = tx.type.substring(0, 1).toUpperCase() + tx.type.substring(1);
         isIncoming = tx.amount > 0;
-        break;
     }
 
     Color statusColor;
-    switch (tx.status) {
-      case TransactionStatus.completed:
+    switch (tx.status.toLowerCase()) {
+      case 'completed':
         statusColor = AppColors.tradingBuy;
         break;
-      case TransactionStatus.pending:
+      case 'pending':
         statusColor = AppColors.warning;
         break;
-      case TransactionStatus.failed:
-      case TransactionStatus.cancelled:
+      case 'failed':
+      case 'cancelled':
         statusColor = AppColors.tradingSell;
         break;
+      default:
+        statusColor = AppColors.textMuted;
     }
 
     return GestureDetector(
@@ -421,7 +314,7 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
-                          tx.status.name.toUpperCase(),
+                          tx.status.toUpperCase(),
                           style: TextStyle(
                             color: statusColor,
                             fontSize: 9,
@@ -433,7 +326,7 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    tx.description ?? '',
+                    tx.network != null ? 'via ${tx.network}' : _formatDate(tx.createdAt),
                     style: AppTypography.caption.copyWith(color: AppColors.textMuted),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -448,10 +341,10 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    CryptoIcon(symbol: tx.asset, size: 18),
+                    CryptoIcon(symbol: tx.currency, size: 18),
                     const SizedBox(width: 6),
                     Text(
-                      '${isIncoming ? '+' : '-'}${tx.amount} ${tx.asset}',
+                      '${isIncoming ? '+' : '-'}${tx.amount} ${tx.currency}',
                       style: AppTypography.bodyMedium.copyWith(
                         color: isIncoming ? AppColors.tradingBuy : AppColors.tradingSell,
                         fontWeight: FontWeight.w600,
@@ -459,11 +352,10 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
                     ),
                   ],
                 ),
-                if (tx.usdValue != null)
-                  Text(
-                    '\$${tx.usdValue!.toStringAsFixed(2)}',
-                    style: AppTypography.caption.copyWith(color: AppColors.textMuted),
-                  ),
+                Text(
+                  _formatDate(tx.createdAt),
+                  style: AppTypography.caption.copyWith(color: AppColors.textMuted),
+                ),
               ],
             ),
           ],
@@ -487,6 +379,37 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
           Text(
             'Your transaction history will appear here',
             style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildErrorState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.error_outline, color: AppColors.tradingSell, size: 64),
+          const SizedBox(height: 16),
+          Text(
+            'Failed to load transactions',
+            style: AppTypography.titleMedium.copyWith(color: AppColors.textMuted),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _error ?? 'Unknown error',
+            style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton(
+            onPressed: _loadTransactions,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.black,
+            ),
+            child: const Text('Retry'),
           ),
         ],
       ),
@@ -525,21 +448,21 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
             // Asset and amount
             Row(
               children: [
-                CryptoIcon(symbol: tx.asset, size: 48),
+                CryptoIcon(symbol: tx.currency, size: 48),
                 const SizedBox(width: 16),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '${tx.amount} ${tx.asset}',
+                      '${tx.amount} ${tx.currency}',
                       style: AppTypography.titleLarge.copyWith(
                         color: AppColors.textPrimary,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                    if (tx.usdValue != null)
+                    if (tx.fee != null)
                       Text(
-                        '\$${tx.usdValue!.toStringAsFixed(2)} USD',
+                        'Fee: ${tx.fee} ${tx.currency}',
                         style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
                       ),
                   ],
@@ -549,14 +472,16 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
             const SizedBox(height: AppSpacing.lg),
             Divider(color: AppColors.glassBorder),
             const SizedBox(height: AppSpacing.md),
-            _buildDetailRow('Type', tx.type.name.toUpperCase()),
-            _buildDetailRow('Status', tx.status.name.toUpperCase()),
+            _buildDetailRow('Type', tx.type.toUpperCase()),
+            _buildDetailRow('Status', tx.status.toUpperCase()),
             _buildDetailRow('Transaction ID', tx.id),
-            _buildDetailRow('Date', _formatDate(tx.timestamp)),
+            _buildDetailRow('Date', _formatDate(tx.createdAt)),
+            if (tx.network != null)
+              _buildDetailRow('Network', tx.network!),
             if (tx.txHash != null)
               _buildDetailRow('TX Hash', tx.txHash!, isCopyable: true),
-            if (tx.description != null)
-              _buildDetailRow('Description', tx.description!),
+            if (tx.toAddress != null)
+              _buildDetailRow('To Address', tx.toAddress!, isCopyable: true),
             const SizedBox(height: AppSpacing.lg),
           ],
         ),

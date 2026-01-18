@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import 'package:qr_flutter/qr_flutter.dart';
+import '../../services/auth_service.dart';
 import '../../theme/colors.dart';
 import '../../theme/typography.dart';
 import '../../theme/spacing.dart';
@@ -2033,7 +2035,51 @@ class _TwoFAModal extends StatefulWidget {
 
 class _TwoFAModalState extends State<_TwoFAModal> {
   int _step = 1;
-  final String _secretKey = 'CRYMADX2FA7K3XM5';
+  String? _secretKey;
+  String? _qrCodeUrl;
+  List<String> _backupCodes = [];
+  bool _isLoadingSetup = false;
+  String? _setupError;
+
+  Future<void> _load2FASetup() async {
+    if (_qrCodeUrl != null) return; // Already loaded
+
+    setState(() {
+      _isLoadingSetup = true;
+      _setupError = null;
+    });
+
+    try {
+      final profileProvider = context.read<ProfileProvider>();
+      final setup = await profileProvider.setup2FA();
+
+      if (setup != null && mounted) {
+        setState(() {
+          _qrCodeUrl = setup.qrCodeUrl;
+          _secretKey = setup.secret;
+          _backupCodes = setup.backupCodes;
+          _isLoadingSetup = false;
+        });
+      } else if (mounted) {
+        setState(() {
+          _setupError = 'Failed to get 2FA setup data';
+          _isLoadingSetup = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _setupError = e.toString().replaceAll('Exception: ', '');
+          _isLoadingSetup = false;
+        });
+      }
+    }
+  }
+
+  void _goToStep2() {
+    setState(() => _step = 2);
+    _load2FASetup();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2215,7 +2261,7 @@ class _TwoFAModalState extends State<_TwoFAModal> {
           width: double.infinity,
           child: AppButton(
             label: 'Continue',
-            onPressed: () => setState(() => _step = 2),
+            onPressed: _goToStep2,
           ),
         ),
       ],
@@ -2274,6 +2320,54 @@ class _TwoFAModalState extends State<_TwoFAModal> {
     final mutedColor = isDark ? AppColors.textMuted : const Color(0xFF777777);
     final cardBg = isDark ? AppColors.backgroundCard : const Color(0xFFF5F5F5);
     final borderColor = isDark ? AppColors.glassBorder : Colors.black.withOpacity(0.1);
+
+    // Show loading state
+    if (_isLoadingSetup) {
+      return Column(
+        children: [
+          const SizedBox(height: AppSpacing.xl),
+          const CircularProgressIndicator(),
+          const SizedBox(height: AppSpacing.lg),
+          Text(
+            'Setting up 2FA...',
+            style: AppTypography.bodyMedium.copyWith(color: subtextColor),
+          ),
+        ],
+      );
+    }
+
+    // Show error state
+    if (_setupError != null) {
+      return Column(
+        children: [
+          const SizedBox(height: AppSpacing.xl),
+          Icon(Icons.error_outline, color: AppColors.tradingSell, size: 48),
+          const SizedBox(height: AppSpacing.lg),
+          Text(
+            'Failed to setup 2FA',
+            style: AppTypography.titleMedium.copyWith(
+              color: textColor,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            _setupError!,
+            style: AppTypography.bodySmall.copyWith(color: subtextColor),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          SizedBox(
+            width: double.infinity,
+            child: AppButton(
+              label: 'Retry',
+              onPressed: _load2FASetup,
+            ),
+          ),
+        ],
+      );
+    }
+
     return Column(
       children: [
         Text(
@@ -2292,7 +2386,7 @@ class _TwoFAModalState extends State<_TwoFAModal> {
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: AppSpacing.lg),
-        // Mock QR Code
+        // Real QR Code from backend
         Container(
           padding: const EdgeInsets.all(AppSpacing.md),
           decoration: BoxDecoration(
@@ -2300,12 +2394,22 @@ class _TwoFAModalState extends State<_TwoFAModal> {
             borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
             border: isDark ? null : Border.all(color: Colors.black.withOpacity(0.1)),
           ),
-          child: Container(
-            width: 160,
-            height: 160,
-            color: Colors.white,
-            child: CustomPaint(painter: _QRCodePainter()),
-          ),
+          child: _qrCodeUrl != null && _qrCodeUrl!.isNotEmpty
+              ? QrImageView(
+                  data: _qrCodeUrl!,
+                  version: QrVersions.auto,
+                  size: 160,
+                  backgroundColor: Colors.white,
+                  errorCorrectionLevel: QrErrorCorrectLevel.M,
+                )
+              : Container(
+                  width: 160,
+                  height: 160,
+                  color: Colors.white,
+                  child: const Center(
+                    child: CircularProgressIndicator(),
+                  ),
+                ),
         ),
         const SizedBox(height: AppSpacing.lg),
         Text(
@@ -2325,23 +2429,26 @@ class _TwoFAModalState extends State<_TwoFAModal> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                _secretKey,
-                style: AppTypography.bodyMedium.copyWith(
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.w600,
-                  fontFamily: 'monospace',
+              Expanded(
+                child: Text(
+                  _secretKey ?? 'Loading...',
+                  style: AppTypography.bodyMedium.copyWith(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w600,
+                    fontFamily: 'monospace',
+                  ),
                 ),
               ),
-              GestureDetector(
-                onTap: () {
-                  Clipboard.setData(ClipboardData(text: _secretKey));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Secret key copied!')),
-                  );
-                },
-                child: Icon(Icons.copy, color: AppColors.primary, size: 18),
-              ),
+              if (_secretKey != null)
+                GestureDetector(
+                  onTap: () {
+                    Clipboard.setData(ClipboardData(text: _secretKey!));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Secret key copied!')),
+                    );
+                  },
+                  child: Icon(Icons.copy, color: AppColors.primary, size: 18),
+                ),
             ],
           ),
         ),
@@ -2443,56 +2550,3 @@ class _TwoFAModalState extends State<_TwoFAModal> {
   }
 }
 
-// Simple QR Code Painter
-class _QRCodePainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = Colors.black;
-    final cellSize = size.width / 20;
-
-    // Draw finder patterns (top-left, top-right, bottom-left)
-    _drawFinderPattern(canvas, paint, 0, 0, cellSize);
-    _drawFinderPattern(canvas, paint, size.width - 7 * cellSize, 0, cellSize);
-    _drawFinderPattern(canvas, paint, 0, size.height - 7 * cellSize, cellSize);
-
-    // Draw some random data pattern
-    final random = [
-      [8, 0], [10, 0], [12, 0],
-      [8, 2], [11, 2],
-      [8, 8], [10, 8], [12, 8],
-      [8, 10], [11, 10],
-      [8, 12], [10, 12], [12, 12],
-      [14, 8], [16, 8], [18, 8],
-      [15, 10], [17, 10],
-      [8, 14], [10, 15], [12, 16],
-      [8, 17], [10, 18],
-      [14, 14], [16, 15], [18, 16],
-      [15, 17], [17, 18],
-    ];
-
-    for (final pos in random) {
-      canvas.drawRect(
-        Rect.fromLTWH(pos[0] * cellSize, pos[1] * cellSize, cellSize, cellSize),
-        paint,
-      );
-    }
-  }
-
-  void _drawFinderPattern(Canvas canvas, Paint paint, double x, double y, double cellSize) {
-    // Outer square
-    canvas.drawRect(Rect.fromLTWH(x, y, 7 * cellSize, 7 * cellSize), paint);
-    // White inner
-    canvas.drawRect(
-      Rect.fromLTWH(x + cellSize, y + cellSize, 5 * cellSize, 5 * cellSize),
-      Paint()..color = Colors.white,
-    );
-    // Black center
-    canvas.drawRect(
-      Rect.fromLTWH(x + 2 * cellSize, y + 2 * cellSize, 3 * cellSize, 3 * cellSize),
-      paint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}

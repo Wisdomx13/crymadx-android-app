@@ -1,3 +1,4 @@
+import 'package:google_sign_in/google_sign_in.dart';
 import '../config/api_config.dart';
 import '../models/user.dart';
 import 'api_service.dart';
@@ -112,6 +113,78 @@ class AuthService {
       requiresVerification: response['requiresVerification'] ?? true,
       email: response['user']?['email'] ?? email,
     );
+  }
+
+  /// Google Sign-In instance
+  final GoogleSignIn _googleSignIn = GoogleSignIn(
+    scopes: ['email', 'profile'],
+  );
+
+  /// Sign in with Google
+  Future<AuthResult> signInWithGoogle() async {
+    try {
+      // Trigger Google Sign-In flow
+      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+
+      if (googleUser == null) {
+        throw Exception('Google Sign-In cancelled');
+      }
+
+      // Get authentication details
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+
+      if (googleAuth.idToken == null) {
+        throw Exception('Failed to get Google ID token');
+      }
+
+      // Send token to backend for verification
+      final response = await _api.post(
+        ApiConfig.googleAuth,
+        data: {
+          'idToken': googleAuth.idToken,
+          'accessToken': googleAuth.accessToken,
+        },
+      );
+
+      // Handle 2FA if required
+      if (response['requires2FA'] == true) {
+        return AuthResult(
+          requires2FA: true,
+          userId: response['userId'],
+          message: response['message'],
+        );
+      }
+
+      // Extract tokens and user data
+      final tokens = response['tokens'];
+      final userData = response['user'];
+
+      if (tokens != null) {
+        await _api.saveTokens(
+          accessToken: tokens['accessToken'],
+          refreshToken: tokens['refreshToken'],
+        );
+        if (userData != null && userData['id'] != null) {
+          await _api.saveUserId(userData['id']);
+        }
+      }
+
+      return AuthResult(
+        accessToken: tokens?['accessToken'] ?? '',
+        refreshToken: tokens?['refreshToken'] ?? '',
+        user: userData != null ? User.fromJson(userData) : null,
+        message: response['message'],
+      );
+    } catch (e) {
+      // Sign out from Google on error
+      await _googleSignIn.signOut();
+      rethrow;
+    }
+  }
+
+  /// Sign out from Google
+  Future<void> signOutGoogle() async {
+    await _googleSignIn.signOut();
   }
 
   /// Verify email with code

@@ -36,6 +36,7 @@ class ApiConfig {
   static const String verifyEmail = '$auth/verify-email';
   static const String resendVerification = '$auth/resend-verification';
   static const String complete2FA = '$auth/complete-2fa';
+  static const String googleAuth = '$auth/google';
 
   // ============================================
   // 2FA ENDPOINTS

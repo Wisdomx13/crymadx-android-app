@@ -1,11 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
 import '../../theme/colors.dart';
 import '../../widgets/widgets.dart';
 import '../../providers/currency_provider.dart';
 import '../../providers/balance_provider.dart';
 import '../../navigation/app_router.dart';
+import '../../services/wallet_service.dart';
+
+/// Extension to capitalize first letter
+extension StringExtension on String {
+  String capitalize() {
+    if (isEmpty) return this;
+    return '${this[0].toUpperCase()}${substring(1).toLowerCase()}';
+  }
+}
 
 /// Assets Screen - Bybit-style wallet
 class AssetsScreen extends StatefulWidget {
@@ -18,6 +28,52 @@ class AssetsScreen extends StatefulWidget {
 class _AssetsScreenState extends State<AssetsScreen> {
   int _selectedAccountTab = 0; // 0 = Funding, 1 = Trading
   bool _hideBalance = false;
+  List<dynamic> _recentTransactions = [];
+  bool _loadingTransactions = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Load balances from backend API
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<BalanceProvider>().loadBalances();
+    });
+    _loadRecentTransactions();
+  }
+
+  Future<void> _loadRecentTransactions() async {
+    setState(() => _loadingTransactions = true);
+    try {
+      final transactions = await walletService.getTransfers(limit: 3);
+      if (mounted) {
+        setState(() {
+          _recentTransactions = transactions;
+          _loadingTransactions = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loadingTransactions = false);
+      }
+    }
+  }
+
+  String _formatTransactionTime(DateTime date) {
+    final now = DateTime.now();
+    final diff = now.difference(date);
+
+    if (diff.inMinutes < 1) {
+      return 'Just now';
+    } else if (diff.inMinutes < 60) {
+      return '${diff.inMinutes}m ago';
+    } else if (diff.inHours < 24) {
+      return '${diff.inHours}h ago';
+    } else if (diff.inDays < 7) {
+      return '${diff.inDays}d ago';
+    } else {
+      return DateFormat('MMM d').format(date);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -348,8 +404,32 @@ class _AssetsScreenState extends State<AssetsScreen> {
 
                 const SizedBox(height: 16),
 
-                // Asset List
-                ..._getAssetsForAccount().map((asset) => _buildAssetCard(asset)),
+                // Asset List - Real data from balance provider
+                ...(_selectedAccountTab == 0
+                    ? balanceProvider.fundingAssets
+                    : balanceProvider.tradingAssets)
+                    .map((asset) => _buildAssetCardFromProvider(asset)),
+
+                // Show empty state if no assets
+                if ((_selectedAccountTab == 0 ? balanceProvider.fundingAssets : balanceProvider.tradingAssets).isEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(32),
+                    child: Column(
+                      children: [
+                        Icon(Icons.account_balance_wallet_outlined, size: 48, color: Colors.grey[600]),
+                        const SizedBox(height: 12),
+                        Text(
+                          'No assets yet',
+                          style: TextStyle(color: Colors.grey[500], fontSize: 14),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Deposit crypto to get started',
+                          style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
 
                 const SizedBox(height: 28),
 
@@ -376,7 +456,7 @@ class _AssetsScreenState extends State<AssetsScreen> {
 
                 const SizedBox(height: 16),
 
-                // Transaction List
+                // Transaction List - Real data
                 Container(
                   decoration: BoxDecoration(
                     color: isDark ? const Color(0xFF121212) : Colors.white,
@@ -390,15 +470,40 @@ class _AssetsScreenState extends State<AssetsScreen> {
                       ),
                     ],
                   ),
-                  child: Column(
-                    children: [
-                      _buildTransactionRow('Deposit', '+500.00 USDT', 'Today, 10:30 AM', true),
-                      Divider(color: isDark ? Colors.grey[900] : Colors.grey[300], height: 1),
-                      _buildTransactionRow('Buy BTC', '-250.00 USDT', 'Yesterday, 2:15 PM', false),
-                      Divider(color: isDark ? Colors.grey[900] : Colors.grey[300], height: 1),
-                      _buildTransactionRow('Transfer', '-100.00 USDT', 'Dec 28, 9:00 AM', false),
-                    ],
-                  ),
+                  child: _loadingTransactions
+                      ? const Padding(
+                          padding: EdgeInsets.all(32),
+                          child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                        )
+                      : _recentTransactions.isEmpty
+                          ? Padding(
+                              padding: const EdgeInsets.all(32),
+                              child: Column(
+                                children: [
+                                  Icon(Icons.receipt_long_outlined, size: 40, color: Colors.grey[600]),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'No transactions yet',
+                                    style: TextStyle(color: Colors.grey[500], fontSize: 13),
+                                  ),
+                                ],
+                              ),
+                            )
+                          : Column(
+                              children: _recentTransactions.asMap().entries.map((entry) {
+                                final index = entry.key;
+                                final tx = entry.value as Transaction;
+                                final isDeposit = tx.type.toLowerCase() == 'deposit';
+                                final amount = '${isDeposit ? '+' : '-'}${tx.amount.toStringAsFixed(2)} ${tx.currency}';
+                                final time = _formatTransactionTime(tx.createdAt);
+                                return Column(
+                                  children: [
+                                    if (index > 0) Divider(color: isDark ? Colors.grey[900] : Colors.grey[300], height: 1),
+                                    _buildTransactionRow(tx.type.capitalize(), amount, time, isDeposit),
+                                  ],
+                                );
+                              }).toList(),
+                            ),
                 ),
 
                 const SizedBox(height: 24),
@@ -452,7 +557,7 @@ class _AssetsScreenState extends State<AssetsScreen> {
     );
   }
 
-  Widget _buildAssetCard(_Asset asset) {
+  Widget _buildAssetCardFromProvider(AssetBalance asset) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return GestureDetector(
       onTap: () {
@@ -579,35 +684,4 @@ class _AssetsScreenState extends State<AssetsScreen> {
     );
   }
 
-  List<_Asset> _getAssetsForAccount() {
-    if (_selectedAccountTab == 0) {
-      return [
-        _Asset(symbol: 'BTC', name: 'Bitcoin', amount: 0.1500, valueUsd: 6450.00),
-        _Asset(symbol: 'ETH', name: 'Ethereum', amount: 1.5, valueUsd: 3420.00),
-        _Asset(symbol: 'USDT', name: 'Tether', amount: 800.00, valueUsd: 800.00),
-        _Asset(symbol: 'SOL', name: 'Solana', amount: 10.0, valueUsd: 984.50),
-      ];
-    } else {
-      return [
-        _Asset(symbol: 'BTC', name: 'Bitcoin', amount: 0.0879, valueUsd: 3782.00),
-        _Asset(symbol: 'ETH', name: 'Ethereum', amount: 1.0, valueUsd: 2280.00),
-        _Asset(symbol: 'USDT', name: 'Tether', amount: 450.00, valueUsd: 450.00),
-        _Asset(symbol: 'SOL', name: 'Solana', amount: 5.5, valueUsd: 542.25),
-      ];
-    }
-  }
-}
-
-class _Asset {
-  final String symbol;
-  final String name;
-  final double amount;
-  final double valueUsd;
-
-  const _Asset({
-    required this.symbol,
-    required this.name,
-    required this.amount,
-    required this.valueUsd,
-  });
 }

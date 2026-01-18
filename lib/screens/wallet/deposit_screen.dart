@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import '../../theme/colors.dart';
 import '../../theme/typography.dart';
 import '../../theme/spacing.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/crypto_icon.dart';
+import '../../services/wallet_service.dart';
 
 // Comprehensive crypto asset data with networks
 class CryptoAsset {
@@ -404,6 +406,11 @@ class _DepositScreenState extends State<DepositScreen> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
+  // Real deposit address from API
+  String _depositAddress = '';
+  String? _depositMemo;
+  String? _depositError;
+
   @override
   void initState() {
     super.initState();
@@ -415,6 +422,40 @@ class _DepositScreenState extends State<DepositScreen> {
       );
       if (_selectedAsset!.networks.isNotEmpty) {
         _selectedNetwork = _selectedAsset!.networks.first;
+        _fetchDepositAddress();
+      }
+    }
+  }
+
+  Future<void> _fetchDepositAddress() async {
+    if (_selectedAsset == null || _selectedNetwork == null) return;
+
+    setState(() {
+      _isLoading = true;
+      _depositError = null;
+      _depositAddress = '';
+      _depositMemo = null;
+    });
+
+    try {
+      final address = await walletService.getDepositAddress(
+        _selectedAsset!.symbol,
+        network: _selectedNetwork,
+      );
+
+      if (mounted) {
+        setState(() {
+          _depositAddress = address.address;
+          _depositMemo = address.memo;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _depositError = e.toString().replaceAll('Exception: ', '');
+          _isLoading = false;
+        });
       }
     }
   }
@@ -428,50 +469,6 @@ class _DepositScreenState extends State<DepositScreen> {
     ).toList();
   }
 
-  // Mock deposit address
-  String get _depositAddress {
-    if (_selectedAsset == null || _selectedNetwork == null) return '';
-    // Generate mock address based on network
-    switch (_selectedNetwork) {
-      case 'Bitcoin':
-      case 'BRC20':
-        return 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh';
-      case 'Lightning':
-        return 'lnbc1pvjluezpp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqdpl2pkx2ctnv5sxxmmwwd5kgetjypeh2ursdae8g6twvus8g6rfwvs8qun0dfjkxaq';
-      case 'ERC20':
-      case 'Arbitrum':
-      case 'Optimism':
-      case 'Base':
-      case 'zkSync Era':
-      case 'Starknet':
-        return '0x742d35Cc6634C0532925a3b844Bc9e7595f2bD1e';
-      case 'TRC20':
-        return 'TJYeasTPa6gpHjNGMLMqvL7UUYH5mtqZnk';
-      case 'BEP20':
-      case 'BEP2':
-        return '0x8F7D26d9a07bC9E6be7B239dc8e3f7C02BF6dA4a';
-      case 'Solana':
-        return '7Np41oeYqPefeNQEHSv1UDhYrehxin3NStELsSKCT4K2';
-      case 'Polygon':
-        return '0x3A7E9f3c2BD82e8d1F6c5A3D08b9e3A1dC4b2E9F';
-      case 'XRP Ledger':
-        return 'rPVMhWBsfF9iMXYj3aAzJVkPDTFNSyWdKy';
-      case 'Cardano':
-        return 'addr1qx2fxv2umyhttkxyxp8x0dlpdt3k6cwng5pxj3jhsydzer3n3p9';
-      case 'TON':
-        return 'EQBvW8Z5huBkMJYdnfAEM5JqTNkuWX3diqYENkWsIL0XggGG';
-      case 'Cosmos':
-      case 'Osmosis':
-        return 'cosmos1vqpjljwsynsn58dugz0w8ut7kun7t8ls2qkmsq';
-      case 'Avalanche C-Chain':
-      case 'Avalanche':
-        return '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266';
-      case 'Fantom':
-        return '0x70997970C51812dc3A010C7d01b50e0d17dc79C8';
-      default:
-        return '0x0000000000000000000000000000000000000000';
-    }
-  }
 
   @override
   void dispose() {
@@ -490,15 +487,8 @@ class _DepositScreenState extends State<DepositScreen> {
   void _selectNetwork(String network) {
     setState(() {
       _selectedNetwork = network;
-      _isLoading = true;
     });
-
-    // Simulate loading
-    Future.delayed(const Duration(milliseconds: 500), () {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    });
+    _fetchDepositAddress();
   }
 
   void _copyAddress() {
@@ -507,6 +497,18 @@ class _DepositScreenState extends State<DepositScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: const Text('Address copied to clipboard'),
+        backgroundColor: AppColors.tradingBuy,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _copyMemo() {
+    if (_depositMemo == null || _depositMemo!.isEmpty) return;
+    Clipboard.setData(ClipboardData(text: _depositMemo!));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Memo/Tag copied to clipboard'),
         backgroundColor: AppColors.tradingBuy,
         behavior: SnackBarBehavior.floating,
       ),
@@ -951,6 +953,78 @@ class _DepositScreenState extends State<DepositScreen> {
       return const Center(child: CircularProgressIndicator());
     }
 
+    // Show error state if API failed
+    if (_depositError != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.error_outline, size: 64, color: AppColors.tradingSell),
+              const SizedBox(height: 16),
+              Text(
+                'Failed to get deposit address',
+                style: AppTypography.titleMedium.copyWith(color: textColor),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _depositError!,
+                style: AppTypography.bodySmall.copyWith(color: mutedColor),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                onPressed: _fetchDepositAddress,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Retry'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.black,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Show empty state if no address returned
+    if (_depositAddress.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.account_balance_wallet_outlined, size: 64, color: mutedColor),
+              const SizedBox(height: 16),
+              Text(
+                'No deposit address available',
+                style: AppTypography.titleMedium.copyWith(color: textColor),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Please contact support if this issue persists',
+                style: AppTypography.bodySmall.copyWith(color: mutedColor),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                onPressed: _fetchDepositAddress,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Retry'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.black,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(AppSpacing.md),
       child: Column(
@@ -985,7 +1059,7 @@ class _DepositScreenState extends State<DepositScreen> {
           ),
           const SizedBox(height: AppSpacing.lg),
 
-          // QR Code
+          // QR Code - Encodes the actual deposit address
           GlassCard(
             variant: GlassVariant.prominent,
             child: Column(
@@ -997,12 +1071,19 @@ class _DepositScreenState extends State<DepositScreen> {
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(16),
                   ),
-                  child: Center(
-                    child: Container(
-                      width: 180,
-                      height: 180,
-                      color: Colors.white,
-                      child: CustomPaint(painter: _QRCodePainter()),
+                  padding: const EdgeInsets.all(10),
+                  child: QrImageView(
+                    data: _depositAddress,
+                    version: QrVersions.auto,
+                    size: 180,
+                    backgroundColor: Colors.white,
+                    eyeStyle: const QrEyeStyle(
+                      eyeShape: QrEyeShape.square,
+                      color: Colors.black,
+                    ),
+                    dataModuleStyle: const QrDataModuleStyle(
+                      dataModuleShape: QrDataModuleShape.square,
+                      color: Colors.black,
                     ),
                   ),
                 ),
@@ -1075,6 +1156,74 @@ class _DepositScreenState extends State<DepositScreen> {
                     ],
                   ),
                 ),
+                // Memo/Tag (if required for this coin)
+                if (_depositMemo != null && _depositMemo!.isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.tradingSell.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.tradingSell.withOpacity(0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.error_outline, color: AppColors.tradingSell, size: 18),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'MEMO/TAG REQUIRED - Include it or funds will be lost!',
+                            style: AppTypography.bodySmall.copyWith(
+                              color: AppColors.tradingSell,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Text(
+                    'Memo/Tag',
+                    style: AppTypography.caption.copyWith(color: mutedColor),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: bgColor,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: borderColor),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _depositMemo!,
+                            style: TextStyle(
+                              color: textColor,
+                              fontSize: 14,
+                              fontFamily: 'monospace',
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        GestureDetector(
+                          onTap: _copyMemo,
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Icon(Icons.copy, color: AppColors.primary, size: 18),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 const SizedBox(height: AppSpacing.lg),
 
                 // Copy Button
@@ -1086,6 +1235,18 @@ class _DepositScreenState extends State<DepositScreen> {
                     onPressed: _copyAddress,
                   ),
                 ),
+                if (_depositMemo != null && _depositMemo!.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: AppButton(
+                      label: 'Copy Memo/Tag',
+                      icon: Icons.copy,
+                      variant: AppButtonVariant.outline,
+                      onPressed: _copyMemo,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -1143,74 +1304,4 @@ class _DepositScreenState extends State<DepositScreen> {
       ),
     );
   }
-}
-
-// Simple QR Code Painter
-class _QRCodePainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = Colors.black;
-    final cellSize = size.width / 25;
-
-    // Draw finder patterns (corner squares)
-    _drawFinderPattern(canvas, paint, 0, 0, cellSize);
-    _drawFinderPattern(canvas, paint, size.width - 7 * cellSize, 0, cellSize);
-    _drawFinderPattern(canvas, paint, 0, size.height - 7 * cellSize, cellSize);
-
-    // Alignment pattern
-    _drawAlignmentPattern(canvas, paint, size.width - 9 * cellSize, size.height - 9 * cellSize, cellSize);
-
-    // Timing patterns
-    for (int i = 8; i < 17; i += 2) {
-      canvas.drawRect(Rect.fromLTWH(i * cellSize, 6 * cellSize, cellSize, cellSize), paint);
-      canvas.drawRect(Rect.fromLTWH(6 * cellSize, i * cellSize, cellSize, cellSize), paint);
-    }
-
-    // Random data pattern
-    final random = [
-      [9, 1], [11, 1], [13, 2], [15, 1], [17, 2],
-      [9, 3], [12, 3], [14, 4], [16, 3], [18, 4],
-      [8, 8], [10, 9], [12, 8], [14, 10], [16, 9],
-      [9, 11], [11, 12], [13, 11], [15, 13], [17, 12],
-      [8, 14], [10, 15], [12, 14], [14, 16], [16, 15],
-      [9, 17], [11, 18], [13, 17], [15, 19], [17, 18],
-    ];
-
-    for (final pos in random) {
-      canvas.drawRect(
-        Rect.fromLTWH(pos[0] * cellSize, pos[1] * cellSize, cellSize, cellSize),
-        paint,
-      );
-    }
-  }
-
-  void _drawFinderPattern(Canvas canvas, Paint paint, double x, double y, double cellSize) {
-    // Outer black square
-    canvas.drawRect(Rect.fromLTWH(x, y, 7 * cellSize, 7 * cellSize), paint);
-    // Inner white square
-    canvas.drawRect(
-      Rect.fromLTWH(x + cellSize, y + cellSize, 5 * cellSize, 5 * cellSize),
-      Paint()..color = Colors.white,
-    );
-    // Center black square
-    canvas.drawRect(
-      Rect.fromLTWH(x + 2 * cellSize, y + 2 * cellSize, 3 * cellSize, 3 * cellSize),
-      paint,
-    );
-  }
-
-  void _drawAlignmentPattern(Canvas canvas, Paint paint, double x, double y, double cellSize) {
-    canvas.drawRect(Rect.fromLTWH(x, y, 5 * cellSize, 5 * cellSize), paint);
-    canvas.drawRect(
-      Rect.fromLTWH(x + cellSize, y + cellSize, 3 * cellSize, 3 * cellSize),
-      Paint()..color = Colors.white,
-    );
-    canvas.drawRect(
-      Rect.fromLTWH(x + 2 * cellSize, y + 2 * cellSize, cellSize, cellSize),
-      paint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

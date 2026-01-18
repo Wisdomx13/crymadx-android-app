@@ -93,6 +93,49 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  /// Sign in with Google
+  Future<bool> signInWithGoogle() async {
+    _isLoading = true;
+    _error = null;
+    _requires2FA = false;
+    _pending2FAUserId = null;
+    notifyListeners();
+
+    try {
+      final result = await authService.signInWithGoogle();
+
+      if (result.requires2FA) {
+        _requires2FA = true;
+        _pending2FAUserId = result.userId;
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
+
+      if (result.isSuccess) {
+        if (result.user != null) {
+          _user = result.user!;
+        } else {
+          _user = await userService.getProfile();
+        }
+        _isAuthenticated = true;
+        _isLoading = false;
+        notifyListeners();
+        return true;
+      } else {
+        _error = result.message ?? 'Google Sign-In failed';
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
+    } catch (e) {
+      _error = e.toString().replaceAll('Exception: ', '');
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
   /// Complete 2FA login
   Future<bool> complete2FA(String code) async {
     if (_pending2FAUserId == null) {
@@ -218,9 +261,16 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  /// Set pending verification email (used when coming from login with unverified email)
+  void setPendingVerificationEmail(String email) {
+    _pendingVerificationEmail = email;
+    notifyListeners();
+  }
+
   /// Resend verification email
-  Future<bool> resendVerification() async {
-    if (_pendingVerificationEmail == null) {
+  Future<bool> resendVerification([String? email]) async {
+    final targetEmail = email ?? _pendingVerificationEmail;
+    if (targetEmail == null) {
       _error = 'No pending email verification';
       notifyListeners();
       return false;
@@ -231,7 +281,8 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await authService.resendVerification(_pendingVerificationEmail!);
+      await authService.resendVerification(targetEmail);
+      _pendingVerificationEmail = targetEmail;
       _isLoading = false;
       notifyListeners();
       return true;

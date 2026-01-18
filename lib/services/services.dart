@@ -9,3 +9,7 @@ export 'swap_service.dart';
 export 'p2p_service.dart';
 export 'earn_service.dart';
 export 'nft_service.dart';
+export 'websocket_service.dart';
+export 'cache_service.dart';
+export 'notification_service.dart';
+export 'portfolio_service.dart';

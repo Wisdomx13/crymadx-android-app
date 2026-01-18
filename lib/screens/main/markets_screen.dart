@@ -4,9 +4,10 @@ import 'dart:async';
 import '../../theme/colors.dart';
 import '../../widgets/widgets.dart';
 import '../../services/crypto_service.dart';
+import '../../services/websocket_service.dart';
 import '../../navigation/app_router.dart';
 
-/// Markets Screen - Crypto market listings with tabs like homepage
+/// Markets Screen - Crypto market listings with LIVE WebSocket updates
 class MarketsScreen extends StatefulWidget {
   const MarketsScreen({super.key});
 
@@ -19,9 +20,12 @@ class _MarketsScreenState extends State<MarketsScreen> {
   List<CryptoTicker> _allCryptos = [];
   List<CryptoTicker> _displayCryptos = [];
   bool _isLoading = true;
-  Timer? _refreshTimer;
   final TextEditingController _searchController = TextEditingController();
   bool _showSearch = false;
+
+  // WebSocket stream subscription for live updates
+  StreamSubscription<TickerData>? _tickerSubscription;
+  bool _isLive = false;
 
   // Market tabs
   int _selectedMarketTab = 1; // 0=Favorites, 1=Hot, 2=New, 3=Gainers, 4=Losers, 5=Turnover
@@ -32,14 +36,49 @@ class _MarketsScreenState extends State<MarketsScreen> {
   void initState() {
     super.initState();
     _loadCryptoData();
-    _refreshTimer = Timer.periodic(const Duration(seconds: 10), (_) => _loadCryptoData());
+    _connectWebSocket();
   }
 
   @override
   void dispose() {
-    _refreshTimer?.cancel();
+    _tickerSubscription?.cancel();
     _searchController.dispose();
     super.dispose();
+  }
+
+  /// Connect to WebSocket for real-time price updates
+  void _connectWebSocket() {
+    // Subscribe to all tickers stream
+    wsService.subscribeToAllTickers();
+
+    // Listen for ticker updates
+    _tickerSubscription = wsService.tickerStream.listen((tickerData) {
+      if (mounted) {
+        _updateTickerData(tickerData);
+      }
+    });
+
+    setState(() => _isLive = true);
+  }
+
+  /// Update ticker data from WebSocket
+  void _updateTickerData(TickerData data) {
+    final index = _allCryptos.indexWhere((c) => c.symbol == data.symbol);
+    if (index != -1) {
+      setState(() {
+        _allCryptos[index] = CryptoTicker(
+          symbol: data.symbol,
+          baseAsset: data.symbol.replaceAll('USDT', ''),
+          price: data.lastPrice,
+          change24h: data.priceChangePercent,
+          high24h: data.highPrice,
+          low24h: data.lowPrice,
+          volume: data.volume,
+          quoteVolume: data.quoteVolume,
+        );
+        _updateDisplayCryptos();
+      });
+    }
   }
 
   Future<void> _loadCryptoData() async {
@@ -267,6 +306,45 @@ class _MarketsScreenState extends State<MarketsScreen> {
               style: TextStyle(color: textColor, fontSize: 12, fontWeight: FontWeight.w600),
             ),
           ),
+          const SizedBox(width: 8),
+          // Live indicator
+          if (_isLive)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.tradingBuy.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.tradingBuy.withOpacity(0.3)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: AppColors.tradingBuy,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.tradingBuy.withOpacity(0.5),
+                          blurRadius: 4,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'LIVE',
+                    style: TextStyle(
+                      color: AppColors.tradingBuy,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           const Spacer(),
           Text(
             '${_displayCryptos.length} pairs',

@@ -37,13 +37,17 @@ class KYCDocument {
 
 /// KYC Status model - matches backend response
 class KYCStatus {
-  final String level; // none, basic, advanced
+  final int level; // 0=none, 1=basic, 2=intermediate, 3=advanced
   final String status; // not_started, pending, approved, rejected
   final List<KYCDocument> documents;
   final DateTime? submittedAt;
   final DateTime? approvedAt;
   final String? rejectionReason;
   final Map<String, dynamic>? limits;
+  final bool personalInfoSubmitted;
+  final bool documentSubmitted;
+  final bool selfieSubmitted;
+  final bool addressProofSubmitted;
 
   KYCStatus({
     required this.level,
@@ -53,15 +57,48 @@ class KYCStatus {
     this.approvedAt,
     this.rejectionReason,
     this.limits,
+    this.personalInfoSubmitted = false,
+    this.documentSubmitted = false,
+    this.selfieSubmitted = false,
+    this.addressProofSubmitted = false,
   });
 
   factory KYCStatus.fromJson(Map<String, dynamic> json) {
+    // Parse level from various formats
+    int levelInt = 0;
+    final levelValue = json['level'] ?? json['kycLevel'] ?? 0;
+    if (levelValue is int) {
+      levelInt = levelValue;
+    } else if (levelValue is String) {
+      switch (levelValue.toLowerCase()) {
+        case 'basic':
+          levelInt = 1;
+          break;
+        case 'intermediate':
+          levelInt = 2;
+          break;
+        case 'advanced':
+          levelInt = 3;
+          break;
+        default:
+          levelInt = 0;
+      }
+    }
+
+    // Check document types for step completion
+    final docs = (json['documents'] as List? ?? [])
+        .map((d) => KYCDocument.fromJson(d))
+        .toList();
+
+    bool hasPersonalInfo = json['personalInfoSubmitted'] ?? json['personalInfo'] != null;
+    bool hasDocument = json['documentSubmitted'] ?? docs.any((d) => d.type == 'id_front' || d.type == 'document');
+    bool hasSelfie = json['selfieSubmitted'] ?? docs.any((d) => d.type == 'selfie');
+    bool hasAddressProof = json['addressProofSubmitted'] ?? docs.any((d) => d.type == 'proof_of_address' || d.type == 'address_proof');
+
     return KYCStatus(
-      level: json['level'] ?? json['kycLevel'] ?? 'none',
+      level: levelInt,
       status: json['status'] ?? json['verificationStatus'] ?? 'not_started',
-      documents: (json['documents'] as List? ?? [])
-          .map((d) => KYCDocument.fromJson(d))
-          .toList(),
+      documents: docs,
       submittedAt: json['submittedAt'] != null
           ? DateTime.parse(json['submittedAt'])
           : null,
@@ -70,6 +107,10 @@ class KYCStatus {
           : null,
       rejectionReason: json['rejectionReason'],
       limits: json['limits'],
+      personalInfoSubmitted: hasPersonalInfo,
+      documentSubmitted: hasDocument,
+      selfieSubmitted: hasSelfie,
+      addressProofSubmitted: hasAddressProof,
     );
   }
 
@@ -435,7 +476,88 @@ class UserService {
     return KYCStatus.fromJson(response);
   }
 
-  /// Submit KYC documents
+  /// Submit personal information (Step 1)
+  Future<void> submitKYCPersonalInfo({
+    required String firstName,
+    required String lastName,
+    required String dateOfBirth,
+    required String nationality,
+  }) async {
+    await _api.post(
+      '${ApiConfig.kycSubmit}/personal-info',
+      data: {
+        'firstName': firstName,
+        'lastName': lastName,
+        'fullName': '$firstName $lastName',
+        'dateOfBirth': dateOfBirth,
+        'nationality': nationality,
+      },
+    );
+  }
+
+  /// Submit identity document (Step 2)
+  Future<void> submitKYCDocument({
+    required String documentType,
+    required File frontImage,
+    File? backImage,
+  }) async {
+    final Map<String, dynamic> formMap = {
+      'documentType': documentType,
+      'idType': documentType,
+      'idFront': await MultipartFile.fromFile(frontImage.path, filename: 'id_front.jpg'),
+    };
+
+    if (backImage != null) {
+      formMap['idBack'] = await MultipartFile.fromFile(backImage.path, filename: 'id_back.jpg');
+    }
+
+    final formData = FormData.fromMap(formMap);
+    await _api.uploadMultipart(
+      '${ApiConfig.kycSubmit}/document',
+      formData: formData,
+    );
+  }
+
+  /// Submit selfie verification (Step 3)
+  Future<void> submitKYCSelfie(File selfieImage) async {
+    final formData = FormData.fromMap({
+      'selfie': await MultipartFile.fromFile(selfieImage.path, filename: 'selfie.jpg'),
+    });
+
+    await _api.uploadMultipart(
+      '${ApiConfig.kycSubmit}/selfie',
+      formData: formData,
+    );
+  }
+
+  /// Submit address proof (Step 4 - Optional)
+  Future<void> submitKYCAddressProof({
+    required String address,
+    required String city,
+    required String postalCode,
+    required String country,
+    required File document,
+  }) async {
+    final formData = FormData.fromMap({
+      'address': address,
+      'city': city,
+      'postalCode': postalCode,
+      'country': country,
+      'proofOfAddress': await MultipartFile.fromFile(document.path, filename: 'address_proof.jpg'),
+    });
+
+    await _api.uploadMultipart(
+      '${ApiConfig.kycSubmit}/address-proof',
+      formData: formData,
+    );
+  }
+
+  /// Submit KYC for final review
+  Future<void> submitKYCForReview() async {
+    await _api.post('${ApiConfig.kycSubmit}/submit');
+  }
+
+  /// Submit all KYC documents at once (legacy method)
   Future<Map<String, dynamic>> submitKYC({
     required String fullName,
     required String dateOfBirth,
@@ -472,42 +594,8 @@ class UserService {
   }
 
   /// Retry KYC after rejection
-  Future<Map<String, dynamic>> retryKYC({
-    required String idType,
-    required String idNumber,
-    File? idFront,
-    File? idBack,
-    File? selfie,
-    File? proofOfAddress,
-  }) async {
-    final Map<String, dynamic> formMap = {
-      'idType': idType,
-      'idNumber': idNumber,
-    };
-
-    if (idFront != null) {
-      formMap['idFront'] = await MultipartFile.fromFile(idFront.path);
-    }
-    if (idBack != null) {
-      formMap['idBack'] = await MultipartFile.fromFile(idBack.path);
-    }
-    if (selfie != null) {
-      formMap['selfie'] = await MultipartFile.fromFile(selfie.path);
-    }
-    if (proofOfAddress != null) {
-      formMap['proofOfAddress'] = await MultipartFile.fromFile(proofOfAddress.path);
-    }
-
-    final formData = FormData.fromMap(formMap);
-    final response = await _api.uploadMultipart(
-      ApiConfig.kycRetry,
-      formData: formData,
-    );
-
-    return {
-      'status': response['status'] ?? 'pending',
-      'message': response['message'] ?? 'KYC retry submitted',
-    };
+  Future<void> retryKYC() async {
+    await _api.post(ApiConfig.kycRetry);
   }
 
   // ============================================

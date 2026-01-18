@@ -5,61 +5,7 @@ import '../../theme/typography.dart';
 import '../../theme/spacing.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/app_button.dart';
-
-// Payment method types
-enum PaymentMethodType { bankCard, bankAccount, crypto, mobileMoney }
-
-// Payment method model
-class PaymentMethod {
-  final String id;
-  final PaymentMethodType type;
-  final String name;
-  final String details;
-  final bool isDefault;
-  final bool isVerified;
-
-  const PaymentMethod({
-    required this.id,
-    required this.type,
-    required this.name,
-    required this.details,
-    this.isDefault = false,
-    this.isVerified = true,
-  });
-}
-
-// Mock payment methods
-final List<PaymentMethod> mockPaymentMethods = [
-  const PaymentMethod(
-    id: 'PM001',
-    type: PaymentMethodType.bankCard,
-    name: 'Visa Card',
-    details: '**** **** **** 4532',
-    isDefault: true,
-    isVerified: true,
-  ),
-  const PaymentMethod(
-    id: 'PM002',
-    type: PaymentMethodType.bankCard,
-    name: 'Mastercard',
-    details: '**** **** **** 8721',
-    isVerified: true,
-  ),
-  const PaymentMethod(
-    id: 'PM003',
-    type: PaymentMethodType.bankAccount,
-    name: 'Chase Bank',
-    details: 'Checking ****6789',
-    isVerified: true,
-  ),
-  const PaymentMethod(
-    id: 'PM004',
-    type: PaymentMethodType.mobileMoney,
-    name: 'Apple Pay',
-    details: 'j***@icloud.com',
-    isVerified: true,
-  ),
-];
+import '../../services/p2p_service.dart';
 
 class PaymentMethodsScreen extends StatefulWidget {
   const PaymentMethodsScreen({super.key});
@@ -69,7 +15,10 @@ class PaymentMethodsScreen extends StatefulWidget {
 }
 
 class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
-  List<PaymentMethod> _paymentMethods = List.from(mockPaymentMethods);
+  List<P2PPaymentMethod> _paymentMethods = [];
+  bool _isLoading = true;
+  String? _error;
+  bool _isSubmitting = false;
 
   // Form controllers
   final _cardNumberController = TextEditingController();
@@ -80,6 +29,12 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
   final _accountNumberController = TextEditingController();
   final _routingController = TextEditingController();
   final _accountHolderController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPaymentMethods();
+  }
 
   @override
   void dispose() {
@@ -94,20 +49,32 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
     super.dispose();
   }
 
-  void _setAsDefault(String id) {
+  Future<void> _loadPaymentMethods() async {
     setState(() {
-      _paymentMethods = _paymentMethods.map((pm) {
-        return PaymentMethod(
-          id: pm.id,
-          type: pm.type,
-          name: pm.name,
-          details: pm.details,
-          isDefault: pm.id == id,
-          isVerified: pm.isVerified,
-        );
-      }).toList();
+      _isLoading = true;
+      _error = null;
     });
 
+    try {
+      final methods = await p2pService.getPaymentMethods();
+      if (mounted) {
+        setState(() {
+          _paymentMethods = methods;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = e.toString().replaceAll('Exception: ', '');
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  void _setAsDefault(String id) {
+    // For now, just update locally - backend would need a setDefault endpoint
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: const Text('Default payment method updated'),
@@ -142,18 +109,33 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
             child: Text('Cancel', style: TextStyle(color: mutedColor)),
           ),
           TextButton(
-            onPressed: () {
-              setState(() {
-                _paymentMethods.removeWhere((pm) => pm.id == id);
-              });
+            onPressed: () async {
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: const Text('Payment method removed'),
-                  backgroundColor: AppColors.tradingSell,
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
+              try {
+                await p2pService.removePaymentMethod(id);
+                setState(() {
+                  _paymentMethods.removeWhere((pm) => pm.id == id);
+                });
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: const Text('Payment method removed'),
+                      backgroundColor: AppColors.tradingBuy,
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Failed to remove: ${e.toString().replaceAll('Exception: ', '')}'),
+                      backgroundColor: AppColors.tradingSell,
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
+              }
             },
             child: Text('Remove', style: TextStyle(color: AppColors.tradingSell)),
           ),
@@ -187,50 +169,94 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
         centerTitle: true,
       ),
       body: SafeArea(
-        child: Column(
-          children: [
-            // Add new button
-            Padding(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              child: GestureDetector(
-                onTap: _showAddPaymentMethodModal,
-                child: Container(
-                  padding: const EdgeInsets.all(AppSpacing.md),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: AppColors.primary.withOpacity(0.3)),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.add_circle_outline, color: AppColors.primary),
-                      const SizedBox(width: 12),
-                      Text(
-                        'Add Payment Method',
-                        style: AppTypography.bodyMedium.copyWith(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w600,
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : _error != null
+                ? _buildErrorState()
+                : RefreshIndicator(
+                    onRefresh: _loadPaymentMethods,
+                    child: Column(
+                      children: [
+                        // Add new button
+                        Padding(
+                          padding: const EdgeInsets.all(AppSpacing.md),
+                          child: GestureDetector(
+                            onTap: _showAddPaymentMethodModal,
+                            child: Container(
+                              padding: const EdgeInsets.all(AppSpacing.md),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.add_circle_outline, color: AppColors.primary),
+                                  const SizedBox(width: 12),
+                                  Text(
+                                    'Add Payment Method',
+                                    style: AppTypography.bodyMedium.copyWith(
+                                      color: AppColors.primary,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
-                    ],
+
+                        // Payment methods list
+                        Expanded(
+                          child: _paymentMethods.isEmpty
+                              ? _buildEmptyState()
+                              : ListView.builder(
+                                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                                  itemCount: _paymentMethods.length,
+                                  itemBuilder: (context, index) {
+                                    final pm = _paymentMethods[index];
+                                    return _buildPaymentMethodCard(pm);
+                                  },
+                                ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
+      ),
+    );
+  }
+
+  Widget _buildErrorState() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : const Color(0xFF000000);
+    final subtextColor = isDark ? AppColors.textTertiary : const Color(0xFF555555);
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.xl),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.error_outline, size: 48, color: AppColors.tradingSell),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              'Failed to load payment methods',
+              style: AppTypography.titleMedium.copyWith(
+                color: textColor,
+                fontWeight: FontWeight.w600,
               ),
             ),
-
-            // Payment methods list
-            Expanded(
-              child: _paymentMethods.isEmpty
-                  ? _buildEmptyState()
-                  : ListView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-                      itemCount: _paymentMethods.length,
-                      itemBuilder: (context, index) {
-                        final pm = _paymentMethods[index];
-                        return _buildPaymentMethodCard(pm);
-                      },
-                    ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              _error ?? 'Unknown error',
+              style: AppTypography.bodySmall.copyWith(color: subtextColor),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            AppButton(
+              label: 'Retry',
+              onPressed: _loadPaymentMethods,
             ),
           ],
         ),
@@ -238,7 +264,7 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
     );
   }
 
-  Widget _buildPaymentMethodCard(PaymentMethod pm) {
+  Widget _buildPaymentMethodCard(P2PPaymentMethod pm) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textColor = isDark ? Colors.white : const Color(0xFF000000);
     final mutedColor = isDark ? AppColors.textMuted : const Color(0xFF555555);
@@ -248,24 +274,27 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
     IconData icon;
     Color iconColor;
 
-    switch (pm.type) {
-      case PaymentMethodType.bankCard:
-        icon = pm.name.contains('Visa') ? Icons.credit_card : Icons.credit_card;
-        iconColor = pm.name.contains('Visa') ? Colors.blue : Colors.orange;
-        break;
-      case PaymentMethodType.bankAccount:
-        icon = Icons.account_balance;
-        iconColor = AppColors.info;
-        break;
-      case PaymentMethodType.crypto:
-        icon = Icons.currency_bitcoin;
-        iconColor = AppColors.warning;
-        break;
-      case PaymentMethodType.mobileMoney:
-        icon = Icons.phone_android;
-        iconColor = AppColors.tradingBuy;
-        break;
+    // Map type string to icon and color
+    final typeLC = pm.type.toLowerCase();
+    if (typeLC.contains('card') || typeLC.contains('credit') || typeLC.contains('debit')) {
+      icon = Icons.credit_card;
+      iconColor = pm.name.toLowerCase().contains('visa') ? Colors.blue : Colors.orange;
+    } else if (typeLC.contains('bank')) {
+      icon = Icons.account_balance;
+      iconColor = AppColors.info;
+    } else if (typeLC.contains('crypto') || typeLC.contains('wallet')) {
+      icon = Icons.currency_bitcoin;
+      iconColor = AppColors.warning;
+    } else if (typeLC.contains('mobile') || typeLC.contains('paypal') || typeLC.contains('apple') || typeLC.contains('google')) {
+      icon = Icons.phone_android;
+      iconColor = AppColors.tradingBuy;
+    } else {
+      icon = Icons.payment;
+      iconColor = AppColors.primary;
     }
+
+    // Extract display details from the details map
+    String detailsDisplay = _formatPaymentDetails(pm);
 
     return GestureDetector(
       onTap: () => _showPaymentMethodOptions(pm),
@@ -299,11 +328,14 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                 children: [
                   Row(
                     children: [
-                      Text(
-                        pm.name,
-                        style: AppTypography.bodyMedium.copyWith(
-                          color: textColor,
-                          fontWeight: FontWeight.w600,
+                      Flexible(
+                        child: Text(
+                          pm.name,
+                          style: AppTypography.bodyMedium.copyWith(
+                            color: textColor,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                       if (pm.isDefault) ...[
@@ -328,32 +360,14 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    pm.details,
+                    detailsDisplay,
                     style: AppTypography.bodySmall.copyWith(color: mutedColor),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
             ),
-            if (pm.isVerified)
-              Icon(Icons.verified, color: AppColors.tradingBuy, size: 20)
-            else
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: AppColors.warning.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  'PENDING',
-                  style: TextStyle(
-                    color: AppColors.warning,
-                    fontSize: 9,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            const SizedBox(width: 8),
-            Icon(Icons.more_vert, color: mutedColor, size: 20),
+            Icon(Icons.chevron_right, color: mutedColor, size: 20),
           ],
         ),
       ),
@@ -384,7 +398,43 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
     );
   }
 
-  void _showPaymentMethodOptions(PaymentMethod pm) {
+  /// Format payment details from Map to display string
+  String _formatPaymentDetails(P2PPaymentMethod pm) {
+    final details = pm.details;
+    if (details.isEmpty) return pm.type;
+
+    // Try to extract common fields
+    if (details.containsKey('accountNumber')) {
+      final account = details['accountNumber']?.toString() ?? '';
+      if (account.length >= 4) {
+        return '****${account.substring(account.length - 4)}';
+      }
+    }
+    if (details.containsKey('cardNumber')) {
+      final card = details['cardNumber']?.toString() ?? '';
+      if (card.length >= 4) {
+        return '**** **** **** ${card.substring(card.length - 4)}';
+      }
+    }
+    if (details.containsKey('email')) {
+      return details['email']?.toString() ?? '';
+    }
+    if (details.containsKey('phone')) {
+      return details['phone']?.toString() ?? '';
+    }
+    if (details.containsKey('bankName')) {
+      return details['bankName']?.toString() ?? '';
+    }
+
+    // Fallback to first value or type
+    if (details.values.isNotEmpty) {
+      return details.values.first?.toString() ?? pm.type;
+    }
+
+    return pm.type;
+  }
+
+  void _showPaymentMethodOptions(P2PPaymentMethod pm) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final sheetBg = isDark ? AppColors.backgroundSecondary : Colors.white;
     final textColor = isDark ? Colors.white : const Color(0xFF000000);
@@ -690,26 +740,58 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
               SizedBox(
                 width: double.infinity,
                 child: AppButton(
-                  label: 'Add Card',
-                  onPressed: () {
-                    // Add card logic
-                    setState(() {
-                      _paymentMethods.add(PaymentMethod(
-                        id: 'PM${DateTime.now().millisecondsSinceEpoch}',
-                        type: PaymentMethodType.bankCard,
-                        name: 'Card',
-                        details: '**** **** **** ${_cardNumberController.text.substring(_cardNumberController.text.length - 4)}',
-                        isVerified: false,
-                      ));
-                    });
+                  label: _isSubmitting ? 'Adding...' : 'Add Card',
+                  onPressed: _isSubmitting ? null : () async {
+                    if (_cardNumberController.text.length < 4) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: const Text('Please enter a valid card number'),
+                          backgroundColor: AppColors.tradingSell,
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                      return;
+                    }
+
+                    setState(() => _isSubmitting = true);
                     Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: const Text('Card added successfully'),
-                        backgroundColor: AppColors.tradingBuy,
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
+
+                    try {
+                      final newMethod = await p2pService.addPaymentMethod(
+                        type: 'card',
+                        name: 'Card ending in ${_cardNumberController.text.substring(_cardNumberController.text.length - 4)}',
+                        details: {
+                          'cardNumber': _cardNumberController.text,
+                          'expiry': _expiryController.text,
+                          'cardHolder': _cardHolderController.text,
+                        },
+                      );
+
+                      if (mounted) {
+                        setState(() {
+                          _paymentMethods.add(newMethod);
+                          _isSubmitting = false;
+                        });
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: const Text('Card added successfully'),
+                            backgroundColor: AppColors.tradingBuy,
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      if (mounted) {
+                        setState(() => _isSubmitting = false);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Failed to add card: ${e.toString().replaceAll('Exception: ', '')}'),
+                            backgroundColor: AppColors.tradingSell,
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      }
+                    }
                   },
                 ),
               ),
@@ -777,25 +859,61 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
               SizedBox(
                 width: double.infinity,
                 child: AppButton(
-                  label: 'Add Bank Account',
-                  onPressed: () {
-                    setState(() {
-                      _paymentMethods.add(PaymentMethod(
-                        id: 'PM${DateTime.now().millisecondsSinceEpoch}',
-                        type: PaymentMethodType.bankAccount,
-                        name: _bankNameController.text,
-                        details: 'Checking ****${_accountNumberController.text.substring(_accountNumberController.text.length - 4)}',
-                        isVerified: false,
-                      ));
-                    });
+                  label: _isSubmitting ? 'Adding...' : 'Add Bank Account',
+                  onPressed: _isSubmitting ? null : () async {
+                    if (_accountNumberController.text.length < 4) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: const Text('Please enter a valid account number'),
+                          backgroundColor: AppColors.tradingSell,
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                      return;
+                    }
+
+                    setState(() => _isSubmitting = true);
                     Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: const Text('Bank account added successfully'),
-                        backgroundColor: AppColors.tradingBuy,
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
+
+                    try {
+                      final newMethod = await p2pService.addPaymentMethod(
+                        type: 'bank_transfer',
+                        name: _bankNameController.text.isNotEmpty
+                            ? _bankNameController.text
+                            : 'Bank Account',
+                        details: {
+                          'bankName': _bankNameController.text,
+                          'accountNumber': _accountNumberController.text,
+                          'routingNumber': _routingController.text,
+                          'accountHolder': _accountHolderController.text,
+                        },
+                      );
+
+                      if (mounted) {
+                        setState(() {
+                          _paymentMethods.add(newMethod);
+                          _isSubmitting = false;
+                        });
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: const Text('Bank account added successfully'),
+                            backgroundColor: AppColors.tradingBuy,
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      if (mounted) {
+                        setState(() => _isSubmitting = false);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Failed to add bank: ${e.toString().replaceAll('Exception: ', '')}'),
+                            backgroundColor: AppColors.tradingSell,
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      }
+                    }
                   },
                 ),
               ),
@@ -804,6 +922,44 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _addMobileWallet(String name, String type) async {
+    Navigator.pop(context);
+    setState(() => _isSubmitting = true);
+
+    try {
+      final newMethod = await p2pService.addPaymentMethod(
+        type: type,
+        name: name,
+        details: {'linked': true},
+      );
+
+      if (mounted) {
+        setState(() {
+          _paymentMethods.add(newMethod);
+          _isSubmitting = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$name linked successfully'),
+            backgroundColor: AppColors.tradingBuy,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to link $name: ${e.toString().replaceAll('Exception: ', '')}'),
+            backgroundColor: AppColors.tradingSell,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 
   void _showMobileWalletModal() {
@@ -843,73 +999,19 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
               'Apple Pay',
               Icons.apple,
               isDark ? Colors.white : Colors.black,
-              onTap: () {
-                setState(() {
-                  _paymentMethods.add(const PaymentMethod(
-                    id: 'PM_APPLE',
-                    type: PaymentMethodType.mobileMoney,
-                    name: 'Apple Pay',
-                    details: 'Linked',
-                    isVerified: true,
-                  ));
-                });
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: const Text('Apple Pay linked successfully'),
-                    backgroundColor: AppColors.tradingBuy,
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
-              },
+              onTap: () => _addMobileWallet('Apple Pay', 'apple_pay'),
             ),
             _buildWalletOption(
               'Google Pay',
               Icons.g_mobiledata,
               Colors.blue,
-              onTap: () {
-                setState(() {
-                  _paymentMethods.add(const PaymentMethod(
-                    id: 'PM_GOOGLE',
-                    type: PaymentMethodType.mobileMoney,
-                    name: 'Google Pay',
-                    details: 'Linked',
-                    isVerified: true,
-                  ));
-                });
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: const Text('Google Pay linked successfully'),
-                    backgroundColor: AppColors.tradingBuy,
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
-              },
+              onTap: () => _addMobileWallet('Google Pay', 'google_pay'),
             ),
             _buildWalletOption(
               'PayPal',
               Icons.payment,
               Colors.blue.shade700,
-              onTap: () {
-                setState(() {
-                  _paymentMethods.add(const PaymentMethod(
-                    id: 'PM_PAYPAL',
-                    type: PaymentMethodType.mobileMoney,
-                    name: 'PayPal',
-                    details: 'Linked',
-                    isVerified: true,
-                  ));
-                });
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: const Text('PayPal linked successfully'),
-                    backgroundColor: AppColors.tradingBuy,
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
-              },
+              onTap: () => _addMobileWallet('PayPal', 'paypal'),
             ),
             const SizedBox(height: AppSpacing.lg),
           ],

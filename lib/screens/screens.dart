@@ -6,5 +6,6 @@ export 'main/main_screen.dart';
 export 'main/home_screen.dart';
 export 'main/markets_screen.dart';
 export 'main/trading_screen.dart';
+export 'main/order_entry_screen.dart';
 export 'main/assets_screen.dart';
 export 'main/profile_screen.dart';

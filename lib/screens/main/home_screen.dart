@@ -9,8 +9,9 @@ import '../../providers/profile_provider.dart';
 import '../../providers/balance_provider.dart';
 import '../../navigation/app_router.dart';
 import '../../services/crypto_service.dart';
+import '../../services/websocket_service.dart';
 
-/// Home Screen - Bybit-inspired sleek design with live prices
+/// Home Screen - Bybit-inspired sleek design with LIVE WebSocket prices
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -25,12 +26,15 @@ class _HomeScreenState extends State<HomeScreen> {
   List<CryptoTicker> _displayCryptos = [];
   bool _isLoading = true;
   bool _balanceVisible = true;
-  Timer? _refreshTimer;
   final GlobalKey _notificationKey = GlobalKey();
   OverlayEntry? _notificationOverlay;
   final TextEditingController _searchController = TextEditingController();
   bool _showSearchResults = false;
   int _currentEventIndex = 0;
+
+  // WebSocket subscription for live updates
+  StreamSubscription<TickerData>? _tickerSubscription;
+  bool _isLive = false;
 
   // Market tabs
   int _selectedMarketTab = 1; // 0=Favorites, 1=Hot, 2=New, 3=Gainers, 4=Losers, 5=Turnover
@@ -50,7 +54,11 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _loadCryptoData();
-    _refreshTimer = Timer.periodic(const Duration(seconds: 10), (_) => _loadCryptoData());
+    _connectWebSocket();
+    // Load user balances from backend
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<BalanceProvider>().loadBalances();
+    });
     Timer.periodic(const Duration(seconds: 5), (_) {
       if (mounted) setState(() => _currentEventIndex = (_currentEventIndex + 1) % _events.length);
     });
@@ -58,7 +66,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
-    _refreshTimer?.cancel();
+    _tickerSubscription?.cancel();
     _removeNotificationOverlay();
     _searchController.dispose();
     super.dispose();
@@ -67,6 +75,41 @@ class _HomeScreenState extends State<HomeScreen> {
   void _removeNotificationOverlay() {
     _notificationOverlay?.remove();
     _notificationOverlay = null;
+  }
+
+  /// Connect to WebSocket for real-time price updates
+  void _connectWebSocket() {
+    // Subscribe to all tickers stream
+    wsService.subscribeToAllTickers();
+
+    // Listen for ticker updates
+    _tickerSubscription = wsService.tickerStream.listen((tickerData) {
+      if (mounted) {
+        _updateTickerData(tickerData);
+      }
+    });
+
+    setState(() => _isLive = true);
+  }
+
+  /// Update ticker data from WebSocket
+  void _updateTickerData(TickerData data) {
+    final index = _topCryptos.indexWhere((c) => c.symbol == data.symbol);
+    if (index != -1) {
+      setState(() {
+        _topCryptos[index] = CryptoTicker(
+          symbol: data.symbol,
+          baseAsset: data.symbol.replaceAll('USDT', ''),
+          price: data.lastPrice,
+          change24h: data.priceChangePercent,
+          high24h: data.highPrice,
+          low24h: data.lowPrice,
+          volume: data.volume,
+          quoteVolume: data.quoteVolume,
+        );
+        _updateDisplayCryptos();
+      });
+    }
   }
 
   Future<void> _loadCryptoData() async {

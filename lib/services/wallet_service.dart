@@ -274,17 +274,147 @@ class WalletService {
     };
   }
 
-  /// Get deposit address for a currency
+  /// Map network names to chain identifiers used by Circle
+  static const Map<String, String> _networkToChain = {
+    // Ethereum networks
+    'ERC20': 'eth',
+    'Ethereum': 'eth',
+    'ETH': 'eth',
+    // Bitcoin networks
+    'Bitcoin': 'btc',
+    'BTC': 'btc',
+    // Solana networks
+    'Solana': 'sol',
+    'SOL': 'sol',
+    // Polygon networks
+    'Polygon': 'matic',
+    'MATIC': 'matic',
+    // Avalanche networks
+    'Avalanche': 'avax',
+    'Avalanche C-Chain': 'avax',
+    'AVAX': 'avax',
+    // Arbitrum networks
+    'Arbitrum': 'arb',
+    'ARB': 'arb',
+    // Optimism networks
+    'Optimism': 'op',
+    'OP': 'op',
+    // Tron networks
+    'TRC20': 'trx',
+    'TRON': 'trx',
+    'TRX': 'trx',
+    // BNB Chain networks
+    'BEP20': 'bsc',
+    'BSC': 'bsc',
+    'BNB': 'bsc',
+    'BNB Smart Chain': 'bsc',
+    // Base network
+    'Base': 'base',
+  };
+
+  /// Get deposit address for a currency by fetching from /user/wallets
+  /// Since the backend doesn't have a separate deposit-address endpoint,
+  /// we use the wallets endpoint which already contains all addresses
   Future<DepositAddress> getDepositAddress(String currency, {String? network}) async {
-    final response = await _api.get(
-      '${ApiConfig.userWallets}/deposit-address',
-      queryParameters: {
-        'currency': currency,
-        if (network != null) 'network': network,
-      },
-    );
-    final addressData = response['address'] ?? response;
-    return DepositAddress.fromJson({...addressData, 'currency': currency});
+    try {
+      // Fetch all wallets from /user/wallets
+      final response = await _api.get(ApiConfig.userWallets);
+      final List<dynamic> wallets = response['wallets'] ?? response['data'] ?? [];
+
+      if (wallets.isEmpty) {
+        throw Exception('No wallets found. Please initialize your wallets first.');
+      }
+
+      // Map the selected network to chain identifier
+      String? targetChain;
+      if (network != null) {
+        targetChain = _networkToChain[network]?.toLowerCase();
+        // If no mapping found, try using the network name directly
+        targetChain ??= network.toLowerCase();
+      }
+
+      // Find the appropriate wallet
+      Map<String, dynamic>? selectedWallet;
+
+      for (var wallet in wallets) {
+        final chain = (wallet['chain'] ?? '').toString().toLowerCase();
+
+        // If a specific network was requested, match by chain
+        if (targetChain != null) {
+          if (chain == targetChain) {
+            selectedWallet = wallet;
+            break;
+          }
+        } else {
+          // No specific network - match by currency symbol
+          // ETH, USDT, USDC typically use eth chain
+          // BTC uses btc chain
+          // SOL uses sol chain
+          final currencyUpper = currency.toUpperCase();
+          if (currencyUpper == 'BTC' && chain == 'btc') {
+            selectedWallet = wallet;
+            break;
+          } else if (currencyUpper == 'SOL' && chain == 'sol') {
+            selectedWallet = wallet;
+            break;
+          } else if (currencyUpper == 'MATIC' && chain == 'matic') {
+            selectedWallet = wallet;
+            break;
+          } else if (['ETH', 'USDT', 'USDC', 'DAI', 'LINK', 'UNI'].contains(currencyUpper) && chain == 'eth') {
+            selectedWallet = wallet;
+            break;
+          }
+        }
+      }
+
+      // If no specific wallet found, default to first one (usually ETH)
+      selectedWallet ??= wallets.first as Map<String, dynamic>;
+
+      // Return the deposit address
+      final wallet = selectedWallet;
+      return DepositAddress(
+        address: wallet['address'] ?? '',
+        network: _getNetworkName(wallet['chain'] ?? ''),
+        memo: wallet['memo'],
+        currency: currency,
+        minDeposit: null,
+      );
+    } catch (e) {
+      // If error message contains HTML (like "Cannot GET"), provide clearer error
+      final errorStr = e.toString();
+      if (errorStr.contains('Cannot GET') || errorStr.contains('<!DOCTYPE')) {
+        throw Exception('Deposit addresses not available. Please try again later.');
+      }
+      rethrow;
+    }
+  }
+
+  /// Convert chain identifier back to user-friendly network name
+  String _getNetworkName(String chain) {
+    switch (chain.toLowerCase()) {
+      case 'eth':
+        return 'ERC20';
+      case 'btc':
+        return 'Bitcoin';
+      case 'sol':
+        return 'Solana';
+      case 'matic':
+        return 'Polygon';
+      case 'avax':
+        return 'Avalanche';
+      case 'arb':
+        return 'Arbitrum';
+      case 'op':
+        return 'Optimism';
+      case 'trx':
+        return 'TRC20';
+      case 'bsc':
+        return 'BEP20';
+      case 'base':
+        return 'Base';
+      default:
+        return chain.toUpperCase();
+    }
   }
 
   // ============================================
@@ -302,6 +432,7 @@ class WalletService {
   }
 
   /// Get transfer history
+  /// Returns empty list if endpoint is not available (graceful degradation)
   Future<List<Transaction>> getTransfers({
     String? type,
     String? currency,
@@ -309,18 +440,31 @@ class WalletService {
     int page = 1,
     int limit = 20,
   }) async {
-    final response = await _api.get(
-      ApiConfig.balanceTransfers,
-      queryParameters: {
-        if (type != null) 'type': type,
-        if (currency != null) 'currency': currency,
-        if (status != null) 'status': status,
-        'page': page,
-        'limit': limit,
-      },
-    );
-    final List<dynamic> data = response['transfers'] ?? response['items'] ?? response['data'] ?? [];
-    return data.map((json) => Transaction.fromJson(json)).toList();
+    try {
+      final response = await _api.get(
+        ApiConfig.balanceTransfers,
+        queryParameters: {
+          if (type != null) 'type': type,
+          if (currency != null) 'currency': currency,
+          if (status != null) 'status': status,
+          'page': page,
+          'limit': limit,
+        },
+      );
+      final List<dynamic> data = response['transfers'] ?? response['items'] ?? response['data'] ?? [];
+      return data.map((json) => Transaction.fromJson(json)).toList();
+    } catch (e) {
+      // If the endpoint doesn't exist (404 or HTML error), return empty list
+      final errorStr = e.toString();
+      if (errorStr.contains('Cannot GET') ||
+          errorStr.contains('<!DOCTYPE') ||
+          errorStr.contains('404') ||
+          errorStr.contains('Not Found')) {
+        // Return empty list - transaction history feature not available yet
+        return [];
+      }
+      rethrow;
+    }
   }
 
   /// Get single transfer by ID
