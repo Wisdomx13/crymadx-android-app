@@ -26,7 +26,6 @@ class AssetsScreen extends StatefulWidget {
 }
 
 class _AssetsScreenState extends State<AssetsScreen> {
-  int _selectedAccountTab = 0; // 0 = Funding, 1 = Trading
   bool _hideBalance = false;
   List<dynamic> _recentTransactions = [];
   bool _loadingTransactions = false;
@@ -124,13 +123,13 @@ class _AssetsScreenState extends State<AssetsScreen> {
                         children: [
                           Row(
                             children: [
-                              Text('Total Balance', style: TextStyle(color: Colors.grey[500], fontSize: 14)),
+                              Text('Total Balance', style: TextStyle(color: isDark ? Colors.grey[500] : const Color(0xFF333333), fontSize: 14)),
                               const SizedBox(width: 8),
                               GestureDetector(
                                 onTap: () => setState(() => _hideBalance = !_hideBalance),
                                 child: Icon(
                                   _hideBalance ? Icons.visibility_off : Icons.visibility,
-                                  color: Colors.grey[500],
+                                  color: isDark ? Colors.grey[500] : const Color(0xFF333333),
                                   size: 18,
                                 ),
                               ),
@@ -148,7 +147,7 @@ class _AssetsScreenState extends State<AssetsScreen> {
                           const SizedBox(height: 4),
                           Text(
                             _hideBalance ? '≈ **** BTC' : '≈ ${(totalBalance / 91000).toStringAsFixed(4)} BTC',
-                            style: TextStyle(color: Colors.grey[500], fontSize: 14),
+                            style: TextStyle(color: isDark ? Colors.grey[500] : const Color(0xFF333333), fontSize: 14),
                           ),
                         ],
                       ),
@@ -197,203 +196,6 @@ class _AssetsScreenState extends State<AssetsScreen> {
                   ),
                 ),
 
-                const SizedBox(height: 28),
-
-                // Account Type Cards - Crystal Clear Buttons
-                Row(
-                  children: [
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () => setState(() => _selectedAccountTab = 0),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: _selectedAccountTab == 0
-                                ? (isDark ? const Color(0xFF0A3D1F) : const Color(0xFFE8F5E9))
-                                : (isDark ? const Color(0xFF121212) : Colors.white),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: _selectedAccountTab == 0
-                                  ? AppColors.primary
-                                  : (isDark ? Colors.grey[800]! : Colors.grey[300]!),
-                              width: _selectedAccountTab == 0 ? 2 : 1,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: _selectedAccountTab == 0
-                                    ? AppColors.primary.withOpacity(isDark ? 0.3 : 0.2)
-                                    : Colors.black.withOpacity(0.05),
-                                blurRadius: _selectedAccountTab == 0 ? 12 : 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Container(
-                                    width: 36,
-                                    height: 36,
-                                    decoration: BoxDecoration(
-                                      color: _selectedAccountTab == 0
-                                          ? AppColors.primary
-                                          : (isDark ? Colors.grey[800] : Colors.grey[200]),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: Icon(
-                                      Icons.account_balance_wallet_rounded,
-                                      color: _selectedAccountTab == 0
-                                          ? Colors.white
-                                          : (isDark ? Colors.grey[400] : Colors.grey[600]),
-                                      size: 18,
-                                    ),
-                                  ),
-                                  const Spacer(),
-                                  if (_selectedAccountTab == 0)
-                                    Container(
-                                      width: 8,
-                                      height: 8,
-                                      decoration: BoxDecoration(
-                                        color: AppColors.primary,
-                                        shape: BoxShape.circle,
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: AppColors.primary.withOpacity(0.5),
-                                            blurRadius: 8,
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                ],
-                              ),
-                              const SizedBox(height: 12),
-                              Text(
-                                'Funding',
-                                style: TextStyle(
-                                  color: _selectedAccountTab == 0
-                                      ? (isDark ? Colors.white : const Color(0xFF000000))
-                                      : (isDark ? Colors.grey[400] : const Color(0xFF333333)),
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 15,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                _hideBalance ? '****' : '\$${balanceProvider.fundingBalance.toStringAsFixed(2)}',
-                                style: TextStyle(
-                                  color: _selectedAccountTab == 0
-                                      ? AppColors.primary
-                                      : (isDark ? Colors.grey[500] : const Color(0xFF555555)),
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () => setState(() => _selectedAccountTab = 1),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: _selectedAccountTab == 1
-                                ? (isDark ? const Color(0xFF0A3D1F) : const Color(0xFFE8F5E9))
-                                : (isDark ? const Color(0xFF121212) : Colors.white),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: _selectedAccountTab == 1
-                                  ? AppColors.primary
-                                  : (isDark ? Colors.grey[800]! : Colors.grey[300]!),
-                              width: _selectedAccountTab == 1 ? 2 : 1,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: _selectedAccountTab == 1
-                                    ? AppColors.primary.withOpacity(isDark ? 0.3 : 0.2)
-                                    : Colors.black.withOpacity(0.05),
-                                blurRadius: _selectedAccountTab == 1 ? 12 : 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Container(
-                                    width: 36,
-                                    height: 36,
-                                    decoration: BoxDecoration(
-                                      color: _selectedAccountTab == 1
-                                          ? AppColors.primary
-                                          : (isDark ? Colors.grey[800] : Colors.grey[200]),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: Icon(
-                                      Icons.candlestick_chart_rounded,
-                                      color: _selectedAccountTab == 1
-                                          ? Colors.white
-                                          : (isDark ? Colors.grey[400] : Colors.grey[600]),
-                                      size: 18,
-                                    ),
-                                  ),
-                                  const Spacer(),
-                                  if (_selectedAccountTab == 1)
-                                    Container(
-                                      width: 8,
-                                      height: 8,
-                                      decoration: BoxDecoration(
-                                        color: AppColors.primary,
-                                        shape: BoxShape.circle,
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: AppColors.primary.withOpacity(0.5),
-                                            blurRadius: 8,
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                ],
-                              ),
-                              const SizedBox(height: 12),
-                              Text(
-                                'Trading',
-                                style: TextStyle(
-                                  color: _selectedAccountTab == 1
-                                      ? (isDark ? Colors.white : const Color(0xFF000000))
-                                      : (isDark ? Colors.grey[400] : const Color(0xFF333333)),
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 15,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                _hideBalance ? '****' : '\$${balanceProvider.tradingBalance.toStringAsFixed(2)}',
-                                style: TextStyle(
-                                  color: _selectedAccountTab == 1
-                                      ? AppColors.primary
-                                      : (isDark ? Colors.grey[500] : const Color(0xFF555555)),
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-
                 const SizedBox(height: 24),
 
                 // My Assets Header
@@ -404,28 +206,25 @@ class _AssetsScreenState extends State<AssetsScreen> {
 
                 const SizedBox(height: 16),
 
-                // Asset List - Real data from balance provider
-                ...(_selectedAccountTab == 0
-                    ? balanceProvider.fundingAssets
-                    : balanceProvider.tradingAssets)
-                    .map((asset) => _buildAssetCardFromProvider(asset)),
+                // Asset List - All assets combined
+                ...balanceProvider.allAssets.map((asset) => _buildAssetCardFromProvider(asset)),
 
                 // Show empty state if no assets
-                if ((_selectedAccountTab == 0 ? balanceProvider.fundingAssets : balanceProvider.tradingAssets).isEmpty)
+                if (balanceProvider.allAssets.isEmpty)
                   Container(
                     padding: const EdgeInsets.all(32),
                     child: Column(
                       children: [
-                        Icon(Icons.account_balance_wallet_outlined, size: 48, color: Colors.grey[600]),
+                        Icon(Icons.account_balance_wallet_outlined, size: 48, color: isDark ? Colors.grey[600] : const Color(0xFF333333)),
                         const SizedBox(height: 12),
                         Text(
                           'No assets yet',
-                          style: TextStyle(color: Colors.grey[500], fontSize: 14),
+                          style: TextStyle(color: isDark ? Colors.grey[500] : const Color(0xFF333333), fontSize: 14),
                         ),
                         const SizedBox(height: 8),
                         Text(
                           'Deposit crypto to get started',
-                          style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                          style: TextStyle(color: isDark ? Colors.grey[600] : const Color(0xFF444444), fontSize: 12),
                         ),
                       ],
                     ),
@@ -480,11 +279,11 @@ class _AssetsScreenState extends State<AssetsScreen> {
                               padding: const EdgeInsets.all(32),
                               child: Column(
                                 children: [
-                                  Icon(Icons.receipt_long_outlined, size: 40, color: Colors.grey[600]),
+                                  Icon(Icons.receipt_long_outlined, size: 40, color: isDark ? Colors.grey[600] : const Color(0xFF333333)),
                                   const SizedBox(height: 8),
                                   Text(
                                     'No transactions yet',
-                                    style: TextStyle(color: Colors.grey[500], fontSize: 13),
+                                    style: TextStyle(color: isDark ? Colors.grey[500] : const Color(0xFF333333), fontSize: 13),
                                   ),
                                 ],
                               ),
@@ -539,7 +338,7 @@ class _AssetsScreenState extends State<AssetsScreen> {
             ),
             child: Icon(
               icon,
-              color: isHighlighted ? Colors.white : Colors.grey[isDark ? 400 : 600],
+              color: isHighlighted ? Colors.white : (isDark ? Colors.grey[400] : const Color(0xFF333333)),
               size: 20,
             ),
           ),
@@ -547,7 +346,7 @@ class _AssetsScreenState extends State<AssetsScreen> {
           Text(
             label,
             style: TextStyle(
-              color: Colors.grey[isDark ? 400 : 600],
+              color: isDark ? Colors.grey[400] : const Color(0xFF333333),
               fontSize: 11,
               fontWeight: FontWeight.w500,
             ),
@@ -568,7 +367,7 @@ class _AssetsScreenState extends State<AssetsScreen> {
             'name': asset.name,
             'amount': asset.amount,
             'valueUsd': asset.valueUsd,
-            'accountType': _selectedAccountTab == 0 ? 'funding' : 'trading',
+            'accountType': 'all',
           },
         );
       },
@@ -598,7 +397,7 @@ class _AssetsScreenState extends State<AssetsScreen> {
                   const SizedBox(height: 2),
                   Text(
                     asset.name,
-                    style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                    style: TextStyle(color: isDark ? Colors.grey[600] : const Color(0xFF333333), fontSize: 13),
                   ),
                 ],
               ),
@@ -617,7 +416,7 @@ class _AssetsScreenState extends State<AssetsScreen> {
                 const SizedBox(height: 2),
                 Text(
                   _hideBalance ? '****' : '\$${asset.valueUsd.toStringAsFixed(2)}',
-                  style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                  style: TextStyle(color: isDark ? Colors.grey[600] : const Color(0xFF333333), fontSize: 13),
                 ),
               ],
             ),

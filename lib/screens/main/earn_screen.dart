@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../theme/colors.dart';
 import '../../widgets/widgets.dart';
+import '../../services/earn_service.dart';
 
-/// Earn Screen - Binance-style crypto staking
+/// Earn Screen - Binance-style crypto staking with live API data
 class EarnScreen extends StatefulWidget {
   const EarnScreen({super.key});
 
@@ -14,16 +15,109 @@ class EarnScreen extends StatefulWidget {
 class _EarnScreenState extends State<EarnScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   int _selectedTab = 0;
+  bool _isLoading = true;
+  String? _error;
 
-  // Staking products will be fetched from backend when API is available
-  // For now, show empty lists - no hardcoded fake APY rates
-  final List<EarnProduct> _flexibleProducts = [];
-  final List<EarnProduct> _lockedProducts = [];
+  // Products from API
+  List<EarnProduct> _flexibleProducts = [];
+  List<EarnProduct> _lockedProducts = [];
+
+  // User positions from API
+  List<SavingsDeposit> _savingsDeposits = [];
+  List<StakingPosition> _stakingPositions = [];
+
+  // Summary data
+  double _totalEarnings = 0;
+  double _totalStaked = 0;
+  int _activePositions = 0;
+  double _estDaily = 0;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      // Load all data in parallel
+      final results = await Future.wait([
+        earnService.getSavingsProducts(),
+        earnService.getStakingProducts(),
+        earnService.getSavingsDeposits(),
+        earnService.getStakingPositions(),
+        earnService.getEarnSummary(),
+      ]);
+
+      final savingsProducts = results[0] as List<SavingsProduct>;
+      final stakingProducts = results[1] as List<StakingProduct>;
+      _savingsDeposits = results[2] as List<SavingsDeposit>;
+      _stakingPositions = results[3] as List<StakingPosition>;
+      final summary = results[4] as Map<String, dynamic>;
+
+      // Convert to EarnProduct model
+      _flexibleProducts = savingsProducts
+          .where((p) => p.isFlexible && p.isActive)
+          .map((p) => EarnProduct(
+                symbol: p.currency,
+                name: p.name,
+                apy: p.apy,
+                minAmount: p.minAmount,
+                isFlexible: true,
+                productId: p.id,
+              ))
+          .toList();
+
+      _lockedProducts = [
+        ...savingsProducts
+            .where((p) => p.isFixed && p.isActive)
+            .map((p) => EarnProduct(
+                  symbol: p.currency,
+                  name: p.name,
+                  apy: p.apy,
+                  minAmount: p.minAmount,
+                  duration: p.lockDays,
+                  isFlexible: false,
+                  productId: p.id,
+                )),
+        ...stakingProducts
+            .where((p) => p.isActive)
+            .map((p) => EarnProduct(
+                  symbol: p.currency,
+                  name: p.name,
+                  apy: p.apy,
+                  minAmount: p.minStake,
+                  duration: p.lockDays,
+                  isFlexible: false,
+                  productId: p.id,
+                  isStaking: true,
+                )),
+      ];
+
+      // Update summary
+      _totalEarnings = summary['totalEarnings'] ?? 0;
+      _totalStaked = (summary['totalSavings'] ?? 0) + (summary['totalStaking'] ?? 0);
+      _activePositions = _savingsDeposits.where((d) => d.isActive).length +
+          _stakingPositions.where((p) => p.isStaking).length;
+      _estDaily = _totalStaked * (summary['avgApy'] ?? 0) / 100 / 365;
+
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = e.toString().replaceAll('Exception: ', '');
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   @override
@@ -107,22 +201,22 @@ class _EarnScreenState extends State<EarnScreen> with SingleTickerProviderStateM
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              const Text('\$0.00', style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w600)),
+              Text('\$${_totalEarnings.toStringAsFixed(2)}', style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w600)),
               const SizedBox(width: 8),
               Padding(
                 padding: const EdgeInsets.only(bottom: 4),
-                child: Text('+\$0.00 today', style: TextStyle(color: AppColors.tradingBuy, fontSize: 12)),
+                child: Text('+\$${_estDaily.toStringAsFixed(4)} today', style: TextStyle(color: AppColors.tradingBuy, fontSize: 12)),
               ),
             ],
           ),
           const SizedBox(height: 16),
           Row(
             children: [
-              _SummaryItem(label: 'Total Staked', value: '\$0.00'),
+              _SummaryItem(label: 'Total Staked', value: '\$${_totalStaked.toStringAsFixed(2)}'),
               Container(width: 1, height: 30, color: Colors.grey[800]),
-              _SummaryItem(label: 'Active Positions', value: '0'),
+              _SummaryItem(label: 'Active Positions', value: '$_activePositions'),
               Container(width: 1, height: 30, color: Colors.grey[800]),
-              _SummaryItem(label: 'Est. Daily', value: '\$0.00'),
+              _SummaryItem(label: 'Est. Daily', value: '\$${_estDaily.toStringAsFixed(4)}'),
             ],
           ),
         ],
@@ -595,6 +689,8 @@ class EarnProduct {
   final int? duration;
   final Map<String, double>? tierApy;
   final bool isFlexible;
+  final String? productId;
+  final bool isStaking;
 
   EarnProduct({
     required this.symbol,
@@ -604,6 +700,8 @@ class EarnProduct {
     this.duration,
     this.tierApy,
     required this.isFlexible,
+    this.productId,
+    this.isStaking = false,
   });
 }
 

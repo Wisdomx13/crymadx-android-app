@@ -165,4 +165,23 @@ class ApiConfig {
   // ============================================
   static const String support = '/support';
   static const String supportTickets = '$support/tickets';
+
+  // ============================================
+  // FIAT ON-RAMP ENDPOINTS
+  // ============================================
+  static const String fiat = '/fiat';
+  static const String fiatProviders = '$fiat/providers';
+  static const String fiatQuote = '$fiat/quote';
+  static const String fiatOrder = '$fiat/order';
+  static const String fiatOrders = '$fiat/orders';
+  static const String fiatSupportedCurrencies = '$fiat/currencies';
+
+  // ============================================
+  // NOTIFICATION ENDPOINTS
+  // ============================================
+  static const String notifications = '/notifications';
+  static const String notificationsList = '$notifications/list';
+  static const String notificationsMarkRead = '$notifications/mark-read';
+  static const String notificationsMarkAllRead = '$notifications/mark-all-read';
+  static const String notificationsUnreadCount = '$notifications/unread-count';
 }

@@ -10,6 +10,7 @@ import '../../providers/balance_provider.dart';
 import '../../navigation/app_router.dart';
 import '../../services/crypto_service.dart';
 import '../../services/websocket_service.dart';
+import '../../services/nft_service.dart';
 
 /// Home Screen - Bybit-inspired sleek design with LIVE WebSocket prices
 class HomeScreen extends StatefulWidget {
@@ -21,10 +22,13 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final CryptoService _cryptoService = CryptoService();
+  final NFTService _nftService = NFTService();
   List<CryptoTicker> _topCryptos = [];
   List<CryptoTicker> _filteredCryptos = [];
   List<CryptoTicker> _displayCryptos = [];
+  List<NFTListing> _featuredNFTs = [];
   bool _isLoading = true;
+  bool _nftLoading = true;
   bool _balanceVisible = true;
   final GlobalKey _notificationKey = GlobalKey();
   OverlayEntry? _notificationOverlay;
@@ -54,6 +58,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _loadCryptoData();
+    _loadNFTData();
     _connectWebSocket();
     // Load user balances from backend
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -62,6 +67,20 @@ class _HomeScreenState extends State<HomeScreen> {
     Timer.periodic(const Duration(seconds: 5), (_) {
       if (mounted) setState(() => _currentEventIndex = (_currentEventIndex + 1) % _events.length);
     });
+  }
+
+  Future<void> _loadNFTData() async {
+    try {
+      final listings = await _nftService.getMarketplaceListings(limit: 6);
+      if (mounted) {
+        setState(() {
+          _featuredNFTs = listings;
+          _nftLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _nftLoading = false);
+    }
   }
 
   @override
@@ -218,6 +237,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           _buildQuickActions(),
                           _buildEventsCarousel(),
                           _buildMarketSection(),
+                          _buildNFTWidget(),
                           const SizedBox(height: 100),
                         ],
                       ),
@@ -275,8 +295,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     style: TextStyle(color: isDark ? Colors.white : Colors.black, fontSize: 13),
                     decoration: InputDecoration(
                       hintText: 'Search markets',
-                      hintStyle: TextStyle(color: Colors.grey[600], fontSize: 13),
-                      prefixIcon: Icon(Icons.search, color: Colors.grey[600], size: 18),
+                      hintStyle: TextStyle(color: isDark ? Colors.grey[600] : const Color(0xFF333333), fontSize: 13),
+                      prefixIcon: Icon(Icons.search, color: isDark ? Colors.grey[600] : const Color(0xFF333333), size: 18),
                       border: InputBorder.none,
                       contentPadding: const EdgeInsets.symmetric(vertical: 10),
                     ),
@@ -507,6 +527,98 @@ class _HomeScreenState extends State<HomeScreen> {
                         },
                       ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNFTWidget() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : const Color(0xFF000000);
+    final subtextColor = isDark ? Colors.grey[500] : const Color(0xFF333333);
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 20, 16, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [AppColors.primary.withOpacity(0.2), AppColors.primary.withOpacity(0.1)],
+                      ),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(Icons.diamond_outlined, color: AppColors.primary, size: 20),
+                  ),
+                  const SizedBox(width: 10),
+                  Text('NFT Marketplace', style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700)),
+                ],
+              ),
+              GestureDetector(
+                onTap: () => context.push(AppRoutes.nft),
+                child: Row(
+                  children: [
+                    Text('View All', style: TextStyle(color: AppColors.primary, fontSize: 13, fontWeight: FontWeight.w600)),
+                    const SizedBox(width: 4),
+                    Icon(Icons.arrow_forward_ios, color: AppColors.primary, size: 12),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // NFT Cards
+          _nftLoading
+              ? SizedBox(
+                  height: 200,
+                  child: Center(child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary)),
+                )
+              : _featuredNFTs.isEmpty
+                  ? Container(
+                      height: 200,
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF0D0D0D) : const Color(0xFFF5F5F5),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: isDark ? Colors.white.withOpacity(0.06) : Colors.black.withOpacity(0.08)),
+                      ),
+                      child: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.diamond_outlined, size: 48, color: subtextColor),
+                            const SizedBox(height: 12),
+                            Text('No NFTs available', style: TextStyle(color: subtextColor, fontSize: 14)),
+                            const SizedBox(height: 8),
+                            GestureDetector(
+                              onTap: () => context.push(AppRoutes.nft),
+                              child: Text('Explore Marketplace', style: TextStyle(color: AppColors.primary, fontSize: 13, fontWeight: FontWeight.w600)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  : SizedBox(
+                      height: 220,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: _featuredNFTs.length,
+                        itemBuilder: (context, index) {
+                          final nft = _featuredNFTs[index];
+                          return _NFTCard(
+                            nft: nft,
+                            onTap: () => context.push(AppRoutes.nft),
+                          );
+                        },
+                      ),
+                    ),
         ],
       ),
     );
@@ -854,6 +966,126 @@ class _MoreItem extends StatelessWidget {
       trailing: Icon(Icons.chevron_right, color: isDark ? Colors.grey[600] : const Color(0xFF555555)),
       onTap: onTap,
       contentPadding: EdgeInsets.zero,
+    );
+  }
+}
+
+/// NFT Card widget for homepage
+class _NFTCard extends StatelessWidget {
+  final NFTListing nft;
+  final VoidCallback onTap;
+
+  const _NFTCard({required this.nft, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : const Color(0xFF000000);
+    final subtextColor = isDark ? Colors.grey[500] : const Color(0xFF333333);
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 160,
+        margin: const EdgeInsets.only(right: 12),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF0D0D0D) : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.08),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: isDark ? Colors.black.withOpacity(0.3) : Colors.black.withOpacity(0.08),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // NFT Image
+            ClipRRect(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
+              child: Container(
+                height: 120,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      AppColors.primary.withOpacity(0.3),
+                      AppColors.secondary.withOpacity(0.3),
+                    ],
+                  ),
+                ),
+                child: nft.nft.imageUrl.isNotEmpty
+                    ? Image.network(
+                        nft.nft.imageUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Center(
+                          child: Icon(Icons.diamond, color: AppColors.primary, size: 40),
+                        ),
+                      )
+                    : Center(
+                        child: Icon(Icons.diamond, color: AppColors.primary, size: 40),
+                      ),
+              ),
+            ),
+            // NFT Info
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    nft.nft.name,
+                    style: TextStyle(
+                      color: textColor,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    nft.nft.collectionName,
+                    style: TextStyle(
+                      color: subtextColor,
+                      fontSize: 11,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          '${nft.price?.toStringAsFixed(2) ?? '0.00'} ${nft.currency}',
+                          style: TextStyle(
+                            color: AppColors.primary,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

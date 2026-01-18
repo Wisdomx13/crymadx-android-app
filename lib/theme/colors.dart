@@ -82,11 +82,11 @@ class AppColors {
   static const Color lightBackgroundDeep = Color(0xFFF0F2F5);
   static const Color lightBackgroundGlassy = Color(0xFFFAFBFC);
 
-  // Text Colors - Light Theme (Strong black for visibility)
-  static const Color lightTextPrimary = Color(0xFF000000);  // Pure black for strong visibility
-  static const Color lightTextSecondary = Color(0xFF333333);  // Strong dark gray
-  static const Color lightTextTertiary = Color(0xFF555555);  // Medium dark gray
-  static const Color lightTextMuted = Color(0xFF777777);  // Muted but still visible
+  // Text Colors - Light Theme (Very black for maximum visibility)
+  static const Color lightTextPrimary = Color(0xFF000000);  // Pure black
+  static const Color lightTextSecondary = Color(0xFF111111);  // Very dark
+  static const Color lightTextTertiary = Color(0xFF222222);  // Dark
+  static const Color lightTextMuted = Color(0xFF333333);  // Medium dark (still very readable)
   static const Color lightTextInverse = Color(0xFFFFFFFF);
 
   // Glass Effects - Light Theme

@@ -129,10 +129,23 @@ class _KYCScreenState extends State<KYCScreen> {
         maxWidth: 1920,
         maxHeight: 1080,
         imageQuality: 85,
+        preferredCameraDevice: type == 'selfie' ? CameraDevice.front : CameraDevice.rear,
       );
 
       if (image != null) {
         final file = File(image.path);
+        // Verify file exists and is readable
+        if (!await file.exists()) {
+          throw Exception('Image file not found');
+        }
+        final fileSize = await file.length();
+        if (fileSize == 0) {
+          throw Exception('Image file is empty');
+        }
+        if (fileSize > 10 * 1024 * 1024) { // 10MB limit
+          throw Exception('Image is too large (max 10MB)');
+        }
+
         setState(() {
           switch (type) {
             case 'front':
@@ -149,11 +162,30 @@ class _KYCScreenState extends State<KYCScreen> {
               break;
           }
         });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Image captured successfully'),
+              backgroundColor: AppColors.success,
+              duration: const Duration(seconds: 1),
+            ),
+          );
+        }
       }
     } catch (e) {
+      String errorMessage = 'Error picking image';
+      final errorStr = e.toString().toLowerCase();
+      if (errorStr.contains('denied') || errorStr.contains('permission')) {
+        errorMessage = 'Permission denied. Please enable camera/gallery access in Settings.';
+      } else if (errorStr.contains('camera')) {
+        errorMessage = 'Camera not available. Please try using the gallery.';
+      } else {
+        errorMessage = 'Error: ${e.toString().replaceAll('Exception: ', '')}';
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error picking image: $e'), backgroundColor: AppColors.error),
+          SnackBar(content: Text(errorMessage), backgroundColor: AppColors.error),
         );
       }
     }

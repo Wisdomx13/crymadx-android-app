@@ -1,19 +1,7 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'api_service.dart';
-
-/// Background message handler - must be top-level function
-@pragma('vm:entry-point')
-Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp();
-  debugPrint('Handling background message: ${message.messageId}');
-  // Handle background message
-}
+import '../config/api_config.dart';
 
 /// Notification types
 enum NotificationType {
@@ -46,14 +34,17 @@ class AppNotification {
     this.isRead = false,
   });
 
-  factory AppNotification.fromRemoteMessage(RemoteMessage message) {
+  factory AppNotification.fromJson(Map<String, dynamic> json) {
     return AppNotification(
-      id: message.messageId ?? DateTime.now().millisecondsSinceEpoch.toString(),
-      title: message.notification?.title ?? 'CrymadX',
-      body: message.notification?.body ?? '',
-      type: _parseType(message.data['type']),
-      data: message.data,
-      timestamp: message.sentTime ?? DateTime.now(),
+      id: json['id']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString(),
+      title: json['title'] ?? 'CrymadX',
+      body: json['body'] ?? json['message'] ?? '',
+      type: _parseType(json['type']),
+      data: json['data'],
+      timestamp: json['createdAt'] != null
+          ? DateTime.tryParse(json['createdAt']) ?? DateTime.now()
+          : DateTime.now(),
+      isRead: json['isRead'] ?? json['read'] ?? false,
     );
   }
 
@@ -75,21 +66,28 @@ class AppNotification {
         return NotificationType.system;
     }
   }
+
+  AppNotification copyWith({bool? isRead}) {
+    return AppNotification(
+      id: id,
+      title: title,
+      body: body,
+      type: type,
+      data: data,
+      timestamp: timestamp,
+      isRead: isRead ?? this.isRead,
+    );
+  }
 }
 
-/// Notification service for push notifications
+/// Notification service for managing notifications
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
   factory NotificationService() => _instance;
   NotificationService._internal();
 
-  final FirebaseMessaging _messaging = FirebaseMessaging.instance;
-  final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
-
   final _notificationController = StreamController<AppNotification>.broadcast();
   final List<AppNotification> _notifications = [];
-
-  String? _fcmToken;
   bool _isInitialized = false;
 
   /// Stream of incoming notifications
@@ -101,45 +99,13 @@ class NotificationService {
   /// Get unread notifications count
   int get unreadCount => _notifications.where((n) => !n.isRead).length;
 
-  /// Get FCM token
-  String? get fcmToken => _fcmToken;
-
   /// Initialize the notification service
   Future<void> init() async {
     if (_isInitialized) return;
 
     try {
-      // Initialize Firebase
-      await Firebase.initializeApp();
-
-      // Set up background message handler
-      FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
-
-      // Request permission
-      await _requestPermission();
-
-      // Get FCM token
-      _fcmToken = await _messaging.getToken();
-      debugPrint('FCM Token: $_fcmToken');
-
-      // Listen for token refresh
-      _messaging.onTokenRefresh.listen(_onTokenRefresh);
-
-      // Initialize local notifications
-      await _initLocalNotifications();
-
-      // Handle foreground messages
-      FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
-
-      // Handle notification tap when app is in background
-      FirebaseMessaging.onMessageOpenedApp.listen(_handleNotificationTap);
-
-      // Check for initial message (app opened from notification)
-      final initialMessage = await _messaging.getInitialMessage();
-      if (initialMessage != null) {
-        _handleNotificationTap(initialMessage);
-      }
-
+      // Fetch initial notifications from backend
+      await fetchNotifications();
       _isInitialized = true;
       debugPrint('NotificationService initialized');
     } catch (e) {
@@ -147,225 +113,19 @@ class NotificationService {
     }
   }
 
-  Future<void> _requestPermission() async {
-    final settings = await _messaging.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-      provisional: false,
-      announcement: false,
-      carPlay: false,
-      criticalAlert: false,
-    );
-
-    debugPrint('Notification permission: ${settings.authorizationStatus}');
-  }
-
-  Future<void> _initLocalNotifications() async {
-    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
-    const iosSettings = DarwinInitializationSettings(
-      requestAlertPermission: true,
-      requestBadgePermission: true,
-      requestSoundPermission: true,
-    );
-
-    const settings = InitializationSettings(
-      android: androidSettings,
-      iOS: iosSettings,
-    );
-
-    await _localNotifications.initialize(
-      settings,
-      onDidReceiveNotificationResponse: _onLocalNotificationTap,
-    );
-
-    // Create notification channel for Android
-    if (Platform.isAndroid) {
-      const channel = AndroidNotificationChannel(
-        'crymadx_channel',
-        'CrymadX Notifications',
-        description: 'Notifications from CrymadX',
-        importance: Importance.high,
-      );
-
-      await _localNotifications
-          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-          ?.createNotificationChannel(channel);
-    }
-  }
-
-  void _handleForegroundMessage(RemoteMessage message) {
-    debugPrint('Foreground message: ${message.notification?.title}');
-
-    final notification = AppNotification.fromRemoteMessage(message);
-    _notifications.insert(0, notification);
-    _notificationController.add(notification);
-
-    // Show local notification
-    _showLocalNotification(message);
-  }
-
-  Future<void> _showLocalNotification(RemoteMessage message) async {
-    final notification = message.notification;
-    if (notification == null) return;
-
-    const androidDetails = AndroidNotificationDetails(
-      'crymadx_channel',
-      'CrymadX Notifications',
-      channelDescription: 'Notifications from CrymadX',
-      importance: Importance.high,
-      priority: Priority.high,
-      icon: '@mipmap/ic_launcher',
-    );
-
-    const iosDetails = DarwinNotificationDetails(
-      presentAlert: true,
-      presentBadge: true,
-      presentSound: true,
-    );
-
-    const details = NotificationDetails(
-      android: androidDetails,
-      iOS: iosDetails,
-    );
-
-    await _localNotifications.show(
-      notification.hashCode,
-      notification.title,
-      notification.body,
-      details,
-      payload: jsonEncode(message.data),
-    );
-  }
-
-  void _handleNotificationTap(RemoteMessage message) {
-    debugPrint('Notification tapped: ${message.notification?.title}');
-    final notification = AppNotification.fromRemoteMessage(message);
-    _navigateFromNotification(notification);
-  }
-
-  void _onLocalNotificationTap(NotificationResponse response) {
-    debugPrint('Local notification tapped: ${response.payload}');
-    if (response.payload != null) {
-      final data = jsonDecode(response.payload!);
-      _navigateFromData(data);
-    }
-  }
-
-  void _navigateFromNotification(AppNotification notification) {
-    // Navigation will be handled by the app based on notification type
-    switch (notification.type) {
-      case NotificationType.transaction:
-        // Navigate to transaction details
-        break;
-      case NotificationType.trade:
-        // Navigate to trade/order details
-        break;
-      case NotificationType.p2p:
-        // Navigate to P2P trade
-        break;
-      case NotificationType.kyc:
-        // Navigate to KYC screen
-        break;
-      case NotificationType.security:
-        // Navigate to security settings
-        break;
-      default:
-        // Navigate to notifications screen
-        break;
-    }
-  }
-
-  void _navigateFromData(Map<String, dynamic> data) {
-    final type = data['type'] as String?;
-    final id = data['id'] as String?;
-
-    switch (type) {
-      case 'transaction':
-        // Navigate to transaction with id
-        break;
-      case 'trade':
-        // Navigate to trade with id
-        break;
-      case 'p2p':
-        // Navigate to P2P trade with id
-        break;
-      default:
-        break;
-    }
-  }
-
-  void _onTokenRefresh(String token) {
-    debugPrint('FCM Token refreshed: $token');
-    _fcmToken = token;
-    _registerTokenWithBackend(token);
-  }
-
-  /// Register FCM token with backend
-  Future<void> _registerTokenWithBackend(String token) async {
-    try {
-      // Send token to backend
-      await api.post(
-        '/user/push-token',
-        data: {
-          'token': token,
-          'platform': Platform.isIOS ? 'ios' : 'android',
-        },
-      );
-      debugPrint('FCM token registered with backend');
-    } catch (e) {
-      debugPrint('Error registering FCM token: $e');
-    }
-  }
-
-  /// Register current token with backend (call after login)
-  Future<void> registerToken() async {
-    if (_fcmToken != null) {
-      await _registerTokenWithBackend(_fcmToken!);
-    }
-  }
-
-  /// Subscribe to a topic
-  Future<void> subscribeToTopic(String topic) async {
-    await _messaging.subscribeToTopic(topic);
-    debugPrint('Subscribed to topic: $topic');
-  }
-
-  /// Unsubscribe from a topic
-  Future<void> unsubscribeFromTopic(String topic) async {
-    await _messaging.unsubscribeFromTopic(topic);
-    debugPrint('Unsubscribed from topic: $topic');
-  }
-
-  /// Mark notification as read
+  /// Mark notification as read (local)
   void markAsRead(String notificationId) {
     final index = _notifications.indexWhere((n) => n.id == notificationId);
     if (index != -1) {
-      _notifications[index] = AppNotification(
-        id: _notifications[index].id,
-        title: _notifications[index].title,
-        body: _notifications[index].body,
-        type: _notifications[index].type,
-        data: _notifications[index].data,
-        timestamp: _notifications[index].timestamp,
-        isRead: true,
-      );
+      _notifications[index] = _notifications[index].copyWith(isRead: true);
     }
   }
 
-  /// Mark all notifications as read
+  /// Mark all notifications as read (local)
   void markAllAsRead() {
     for (var i = 0; i < _notifications.length; i++) {
       if (!_notifications[i].isRead) {
-        _notifications[i] = AppNotification(
-          id: _notifications[i].id,
-          title: _notifications[i].title,
-          body: _notifications[i].body,
-          type: _notifications[i].type,
-          data: _notifications[i].data,
-          timestamp: _notifications[i].timestamp,
-          isRead: true,
-        );
+        _notifications[i] = _notifications[i].copyWith(isRead: true);
       }
     }
   }
@@ -375,38 +135,81 @@ class NotificationService {
     _notifications.clear();
   }
 
-  /// Show a local notification (for app-generated notifications)
-  Future<void> showNotification({
-    required String title,
-    required String body,
-    Map<String, dynamic>? data,
-  }) async {
-    const androidDetails = AndroidNotificationDetails(
-      'crymadx_channel',
-      'CrymadX Notifications',
-      channelDescription: 'Notifications from CrymadX',
-      importance: Importance.high,
-      priority: Priority.high,
-    );
+  /// Add a notification manually (for testing or local notifications)
+  void addNotification(AppNotification notification) {
+    _notifications.insert(0, notification);
+    _notificationController.add(notification);
+  }
 
-    const iosDetails = DarwinNotificationDetails(
-      presentAlert: true,
-      presentBadge: true,
-      presentSound: true,
-    );
+  // ============================================
+  // BACKEND API METHODS
+  // ============================================
 
-    const details = NotificationDetails(
-      android: androidDetails,
-      iOS: iosDetails,
-    );
+  /// Fetch notifications from backend API
+  Future<List<AppNotification>> fetchNotifications({int page = 1, int limit = 20}) async {
+    try {
+      final response = await api.get(
+        ApiConfig.notificationsList,
+        queryParameters: {'page': page, 'limit': limit},
+      );
 
-    await _localNotifications.show(
-      DateTime.now().millisecondsSinceEpoch.remainder(100000),
-      title,
-      body,
-      details,
-      payload: data != null ? jsonEncode(data) : null,
-    );
+      final List<dynamic> items = response['notifications'] ?? response['items'] ?? response['data'] ?? [];
+      final notifications = items.map((item) => AppNotification.fromJson(item)).toList();
+
+      // Update local cache
+      if (page == 1) {
+        _notifications.clear();
+      }
+      _notifications.addAll(notifications);
+
+      return notifications;
+    } catch (e) {
+      debugPrint('Error fetching notifications: $e');
+      // Return cached notifications if API fails
+      return _notifications;
+    }
+  }
+
+  /// Mark a notification as read on backend
+  Future<bool> markAsReadOnServer(String notificationId) async {
+    try {
+      await api.post(
+        ApiConfig.notificationsMarkRead,
+        data: {'notificationId': notificationId},
+      );
+
+      // Update local state
+      markAsRead(notificationId);
+      return true;
+    } catch (e) {
+      debugPrint('Error marking notification as read: $e');
+      return false;
+    }
+  }
+
+  /// Mark all notifications as read on backend
+  Future<bool> markAllAsReadOnServer() async {
+    try {
+      await api.post(ApiConfig.notificationsMarkAllRead);
+
+      // Update local state
+      markAllAsRead();
+      return true;
+    } catch (e) {
+      debugPrint('Error marking all notifications as read: $e');
+      return false;
+    }
+  }
+
+  /// Get unread count from backend
+  Future<int> fetchUnreadCount() async {
+    try {
+      final response = await api.get(ApiConfig.notificationsUnreadCount);
+      return response['count'] ?? response['unreadCount'] ?? 0;
+    } catch (e) {
+      debugPrint('Error fetching unread count: $e');
+      return unreadCount; // Return local count
+    }
   }
 
   /// Dispose the service

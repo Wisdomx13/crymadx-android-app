@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../theme/colors.dart';
+import '../../services/notification_service.dart';
 
-/// Notifications Screen - Full subpage
+/// Notifications Screen - Full subpage with dynamic API data
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
 
@@ -11,82 +12,131 @@ class NotificationsScreen extends StatefulWidget {
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
-  final List<_Notification> _notifications = [
-    _Notification(
-      icon: Icons.trending_up,
-      title: 'BTC Price Alert',
-      message: 'Bitcoin reached \$92,655.70',
-      time: '2 min ago',
-      type: 'price',
-      isRead: false,
-    ),
-    _Notification(
-      icon: Icons.check_circle,
-      title: 'Deposit Successful',
-      message: 'Your deposit of 500 USDT has been confirmed',
-      time: '15 min ago',
-      type: 'success',
-      isRead: false,
-    ),
-    _Notification(
-      icon: Icons.swap_horiz,
-      title: 'Trade Executed',
-      message: 'Buy order for 0.01 BTC completed at \$92,500',
-      time: '1 hour ago',
-      type: 'trade',
-      isRead: true,
-    ),
-    _Notification(
-      icon: Icons.security,
-      title: 'Security Alert',
-      message: 'New login detected from Chrome on Windows',
-      time: '3 hours ago',
-      type: 'security',
-      isRead: true,
-    ),
-    _Notification(
-      icon: Icons.campaign,
-      title: 'New Promotion',
-      message: 'Trade & Win Campaign - Up to \$600,000 in prizes!',
-      time: '5 hours ago',
-      type: 'promo',
-      isRead: true,
-    ),
-    _Notification(
-      icon: Icons.people,
-      title: 'New Referral',
-      message: 'j***@gmail.com signed up using your referral code',
-      time: 'Yesterday',
-      type: 'referral',
-      isRead: true,
-    ),
-    _Notification(
-      icon: Icons.trending_down,
-      title: 'ETH Price Alert',
-      message: 'Ethereum dropped below \$2,200',
-      time: 'Yesterday',
-      type: 'price',
-      isRead: true,
-    ),
-    _Notification(
-      icon: Icons.verified,
-      title: 'KYC Update',
-      message: 'Your identity verification is pending review',
-      time: '2 days ago',
-      type: 'kyc',
-      isRead: true,
-    ),
-  ];
+  List<AppNotification> _notifications = [];
+  bool _isLoading = true;
+  String? _error;
 
-  void _markAllAsRead() {
+  @override
+  void initState() {
+    super.initState();
+    _loadNotifications();
+  }
+
+  Future<void> _loadNotifications() async {
     setState(() {
-      for (var notification in _notifications) {
-        notification.isRead = true;
-      }
+      _isLoading = true;
+      _error = null;
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: const Text('All notifications marked as read'), backgroundColor: AppColors.success),
-    );
+
+    try {
+      final notifications = await notificationService.fetchNotifications();
+      if (mounted) {
+        setState(() {
+          _notifications = notifications;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = e.toString().replaceAll('Exception: ', '');
+          _isLoading = false;
+          // Use cached notifications if available
+          _notifications = notificationService.notifications;
+        });
+      }
+    }
+  }
+
+  Future<void> _markAllAsRead() async {
+    final success = await notificationService.markAllAsReadOnServer();
+    if (mounted) {
+      if (success) {
+        setState(() {
+          _notifications = notificationService.notifications;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: const Text('All notifications marked as read'), backgroundColor: AppColors.success),
+        );
+      } else {
+        // Still update local state
+        notificationService.markAllAsRead();
+        setState(() {
+          _notifications = notificationService.notifications;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: const Text('Marked as read locally'), backgroundColor: AppColors.warning),
+        );
+      }
+    }
+  }
+
+  Future<void> _markAsRead(AppNotification notification) async {
+    if (notification.isRead) return;
+
+    await notificationService.markAsReadOnServer(notification.id);
+    if (mounted) {
+      setState(() {
+        _notifications = notificationService.notifications;
+      });
+    }
+  }
+
+  IconData _getIconForType(NotificationType type) {
+    switch (type) {
+      case NotificationType.transaction:
+        return Icons.swap_horiz;
+      case NotificationType.trade:
+        return Icons.candlestick_chart;
+      case NotificationType.p2p:
+        return Icons.people;
+      case NotificationType.kyc:
+        return Icons.verified;
+      case NotificationType.security:
+        return Icons.security;
+      case NotificationType.marketing:
+        return Icons.campaign;
+      case NotificationType.system:
+      default:
+        return Icons.notifications;
+    }
+  }
+
+  Color _getColorForType(NotificationType type) {
+    switch (type) {
+      case NotificationType.transaction:
+        return AppColors.tradingBuy;
+      case NotificationType.trade:
+        return AppColors.primary;
+      case NotificationType.p2p:
+        return Colors.blue;
+      case NotificationType.kyc:
+        return Colors.purple;
+      case NotificationType.security:
+        return Colors.orange;
+      case NotificationType.marketing:
+        return Colors.pink;
+      case NotificationType.system:
+      default:
+        return AppColors.primary;
+    }
+  }
+
+  String _formatTime(DateTime timestamp) {
+    final now = DateTime.now();
+    final diff = now.difference(timestamp);
+
+    if (diff.inMinutes < 1) {
+      return 'Just now';
+    } else if (diff.inMinutes < 60) {
+      return '${diff.inMinutes} min ago';
+    } else if (diff.inHours < 24) {
+      return '${diff.inHours} hour${diff.inHours > 1 ? 's' : ''} ago';
+    } else if (diff.inDays < 7) {
+      return '${diff.inDays} day${diff.inDays > 1 ? 's' : ''} ago';
+    } else {
+      return '${timestamp.day}/${timestamp.month}/${timestamp.year}';
+    }
   }
 
   @override
@@ -94,6 +144,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bgColor = isDark ? Colors.black : AppColors.lightBackgroundPrimary;
     final textColor = isDark ? Colors.white : AppColors.lightTextPrimary;
+    final subtextColor = isDark ? Colors.grey[500] : const Color(0xFF333333);
     final unreadCount = _notifications.where((n) => !n.isRead).length;
 
     return Scaffold(
@@ -114,91 +165,121 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             ),
         ],
       ),
-      body: Column(
-        children: [
-          // Unread count
-          if (unreadCount > 0)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              color: AppColors.primary.withOpacity(0.1),
-              child: Text(
-                '$unreadCount unread notifications',
-                style: TextStyle(color: AppColors.primary, fontSize: 13),
-              ),
-            ),
-          // Notifications List
-          Expanded(
-            child: ListView.builder(
-              itemCount: _notifications.length,
-              itemBuilder: (context, index) => _NotificationItem(
-                notification: _notifications[index],
-                onTap: () {
-                  setState(() {
-                    _notifications[index].isRead = true;
-                  });
-                },
-              ),
-            ),
-          ),
-        ],
+      body: RefreshIndicator(
+        onRefresh: _loadNotifications,
+        color: AppColors.primary,
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : _error != null && _notifications.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.error_outline, size: 48, color: subtextColor),
+                        const SizedBox(height: 12),
+                        Text(_error!, style: TextStyle(color: subtextColor)),
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed: _loadNotifications,
+                          child: const Text('Retry'),
+                        ),
+                      ],
+                    ),
+                  )
+                : _notifications.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.notifications_off_outlined, size: 64, color: subtextColor),
+                            const SizedBox(height: 16),
+                            Text(
+                              'No notifications yet',
+                              style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w600),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'We\'ll notify you when something important happens',
+                              style: TextStyle(color: subtextColor, fontSize: 14),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      )
+                    : Column(
+                        children: [
+                          // Unread count banner
+                          if (unreadCount > 0)
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              color: AppColors.primary.withOpacity(0.1),
+                              child: Text(
+                                '$unreadCount unread notification${unreadCount > 1 ? 's' : ''}',
+                                style: TextStyle(color: AppColors.primary, fontSize: 13),
+                              ),
+                            ),
+                          // Notifications List
+                          Expanded(
+                            child: ListView.builder(
+                              itemCount: _notifications.length,
+                              itemBuilder: (context, index) {
+                                final notification = _notifications[index];
+                                return _NotificationItem(
+                                  icon: _getIconForType(notification.type),
+                                  iconColor: _getColorForType(notification.type),
+                                  title: notification.title,
+                                  message: notification.body,
+                                  time: _formatTime(notification.timestamp),
+                                  isRead: notification.isRead,
+                                  isDark: isDark,
+                                  onTap: () => _markAsRead(notification),
+                                );
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
       ),
     );
   }
 }
 
-class _Notification {
+class _NotificationItem extends StatelessWidget {
   final IconData icon;
+  final Color iconColor;
   final String title;
   final String message;
   final String time;
-  final String type;
-  bool isRead;
+  final bool isRead;
+  final bool isDark;
+  final VoidCallback onTap;
 
-  _Notification({
+  const _NotificationItem({
     required this.icon,
+    required this.iconColor,
     required this.title,
     required this.message,
     required this.time,
-    required this.type,
     required this.isRead,
+    required this.isDark,
+    required this.onTap,
   });
-}
-
-class _NotificationItem extends StatelessWidget {
-  final _Notification notification;
-  final VoidCallback onTap;
-
-  const _NotificationItem({required this.notification, required this.onTap});
-
-  Color get _iconColor {
-    switch (notification.type) {
-      case 'price':
-        return notification.icon == Icons.trending_up ? AppColors.tradingBuy : AppColors.tradingSell;
-      case 'success':
-        return AppColors.tradingBuy;
-      case 'trade':
-        return AppColors.primary;
-      case 'security':
-        return Colors.orange;
-      case 'promo':
-        return Colors.purple;
-      case 'referral':
-        return Colors.blue;
-      default:
-        return AppColors.primary;
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
+    final textColor = isDark ? Colors.white : const Color(0xFF000000);
+    final subtextColor = isDark ? Colors.grey[500] : const Color(0xFF333333);
+    final timeColor = isDark ? Colors.grey[700] : const Color(0xFF555555);
+    final borderColor = isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.08);
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: notification.isRead ? Colors.transparent : AppColors.primary.withOpacity(0.05),
-          border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.05))),
+          color: isRead ? Colors.transparent : AppColors.primary.withOpacity(0.05),
+          border: Border(bottom: BorderSide(color: borderColor)),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -207,10 +288,10 @@ class _NotificationItem extends StatelessWidget {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: _iconColor.withOpacity(0.15),
+                color: iconColor.withOpacity(0.15),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(notification.icon, color: _iconColor, size: 20),
+              child: Icon(icon, color: iconColor, size: 20),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -221,15 +302,15 @@ class _NotificationItem extends StatelessWidget {
                     children: [
                       Expanded(
                         child: Text(
-                          notification.title,
+                          title,
                           style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: notification.isRead ? FontWeight.w500 : FontWeight.w700,
+                            color: textColor,
+                            fontWeight: isRead ? FontWeight.w500 : FontWeight.w700,
                             fontSize: 14,
                           ),
                         ),
                       ),
-                      if (!notification.isRead)
+                      if (!isRead)
                         Container(
                           width: 8,
                           height: 8,
@@ -242,13 +323,13 @@ class _NotificationItem extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    notification.message,
-                    style: TextStyle(color: Colors.grey[500], fontSize: 13),
+                    message,
+                    style: TextStyle(color: subtextColor, fontSize: 13),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 4),
-                  Text(notification.time, style: TextStyle(color: Colors.grey[700], fontSize: 11)),
+                  Text(time, style: TextStyle(color: timeColor, fontSize: 11)),
                 ],
               ),
             ),

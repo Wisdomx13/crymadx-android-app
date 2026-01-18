@@ -7,6 +7,7 @@ import '../../theme/typography.dart';
 import '../../widgets/widgets.dart';
 import '../../providers/auth_provider.dart';
 import '../../navigation/app_router.dart';
+import '../../services/auth_service.dart';
 
 /// Login Screen - Sleek dark design
 class LoginScreen extends StatefulWidget {
@@ -156,50 +157,7 @@ class _LoginScreenState extends State<LoginScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       isScrollControlled: true,
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-        ),
-        child: Container(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Reset Password', style: AppTypography.headlineSmall),
-              const SizedBox(height: 8),
-              Text(
-                'Enter your email and we\'ll send you a reset link',
-                style: AppTypography.bodyMedium.copyWith(
-                  color: AppColors.textTertiary,
-                ),
-              ),
-              const SizedBox(height: 24),
-              _buildSleekInput(
-                hint: 'Enter your email',
-                icon: Icons.email_outlined,
-                keyboardType: TextInputType.emailAddress,
-              ),
-              const SizedBox(height: 24),
-              AppButton(
-                label: 'Send Reset Link',
-                onPressed: () {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: const Text('Reset link sent to your email!'),
-                      backgroundColor: AppColors.success,
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
-                },
-                isFullWidth: true,
-              ),
-              const SizedBox(height: 16),
-            ],
-          ),
-        ),
-      ),
+      builder: (context) => _ForgotPasswordSheet(),
     );
   }
 
@@ -548,40 +506,252 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
-/// Google Logo Widget - Simple colored G implementation
+/// Forgot Password Bottom Sheet - Dynamic with API
+class _ForgotPasswordSheet extends StatefulWidget {
+  @override
+  State<_ForgotPasswordSheet> createState() => _ForgotPasswordSheetState();
+}
+
+class _ForgotPasswordSheetState extends State<_ForgotPasswordSheet> {
+  final TextEditingController _emailController = TextEditingController();
+  bool _isLoading = false;
+  String? _errorMessage;
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleForgotPassword() async {
+    final email = _emailController.text.trim();
+
+    // Validate email
+    if (email.isEmpty) {
+      setState(() => _errorMessage = 'Please enter your email address');
+      return;
+    }
+
+    if (!email.contains('@') || !email.contains('.')) {
+      setState(() => _errorMessage = 'Please enter a valid email address');
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final authService = AuthService();
+      final message = await authService.forgotPassword(email);
+
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        String errorMsg = e.toString().replaceAll('Exception: ', '');
+
+        // Check for specific error messages
+        if (errorMsg.toLowerCase().contains('not found') ||
+            errorMsg.toLowerCase().contains('not registered') ||
+            errorMsg.toLowerCase().contains('no account') ||
+            errorMsg.toLowerCase().contains('does not exist')) {
+          errorMsg = 'This email is not registered. Please check your email or create a new account.';
+        }
+
+        setState(() {
+          _isLoading = false;
+          _errorMessage = errorMsg;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Reset Password', style: AppTypography.headlineSmall),
+            const SizedBox(height: 8),
+            Text(
+              'Enter your email and we\'ll send you a reset link',
+              style: AppTypography.bodyMedium.copyWith(
+                color: AppColors.textTertiary,
+              ),
+            ),
+            const SizedBox(height: 24),
+            // Email input
+            Container(
+              height: 48,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0D0D0D),
+                borderRadius: BorderRadius.circular(8),
+                border: _errorMessage != null
+                    ? Border.all(color: AppColors.error, width: 1)
+                    : null,
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.email_outlined, color: Colors.grey[600], size: 20),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: _emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      style: const TextStyle(color: Colors.white, fontSize: 15),
+                      decoration: InputDecoration(
+                        hintText: 'Enter your email',
+                        hintStyle: TextStyle(color: Colors.grey[700], fontSize: 15),
+                        border: InputBorder.none,
+                      ),
+                      onChanged: (_) {
+                        if (_errorMessage != null) {
+                          setState(() => _errorMessage = null);
+                        }
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Error message
+            if (_errorMessage != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                _errorMessage!,
+                style: TextStyle(
+                  color: AppColors.error,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+            const SizedBox(height: 24),
+            AppButton(
+              label: _isLoading ? 'Sending...' : 'Send Reset Link',
+              onPressed: _isLoading ? null : _handleForgotPassword,
+              isFullWidth: true,
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Google Logo Widget - Official Google "G" logo
 class GoogleLogo extends StatelessWidget {
   final double size;
   const GoogleLogo({super.key, this.size = 20});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SizedBox(
       width: size,
       height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color(0xFFEA4335), // Red
-            Color(0xFFFBBC05), // Yellow
-            Color(0xFF34A853), // Green
-            Color(0xFF4285F4), // Blue
-          ],
-        ),
-      ),
-      child: Center(
-        child: Text(
-          'G',
-          style: TextStyle(
-            fontSize: size * 0.65,
-            fontWeight: FontWeight.w700,
-            color: Colors.white,
-            height: 1.1,
-          ),
-        ),
+      child: CustomPaint(
+        painter: _GoogleLogoPainter(),
+        size: Size(size, size),
       ),
     );
   }
+}
+
+/// Custom painter for Google "G" logo with official colors
+class _GoogleLogoPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final double s = size.width;
+    final double strokeWidth = s * 0.18;
+    final double radius = (s - strokeWidth) / 2;
+    final Offset center = Offset(s / 2, s / 2);
+
+    // Google official colors
+    const Color blue = Color(0xFF4285F4);
+    const Color green = Color(0xFF34A853);
+    const Color yellow = Color(0xFFFBBC05);
+    const Color red = Color(0xFFEA4335);
+
+    final Paint paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.butt;
+
+    // Draw the colored arcs (G shape)
+    // Blue arc (right side, from 315° to 45° going through 0°)
+    paint.color = blue;
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      -0.4, // Start angle (slightly before 0°)
+      1.2,  // Sweep angle
+      false,
+      paint,
+    );
+
+    // Green arc (bottom right, from 45° to 135°)
+    paint.color = green;
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      0.8,
+      1.0,
+      false,
+      paint,
+    );
+
+    // Yellow arc (bottom left, from 135° to 180°)
+    paint.color = yellow;
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      1.8,
+      0.7,
+      false,
+      paint,
+    );
+
+    // Red arc (top, from 180° to 315°)
+    paint.color = red;
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      2.5,
+      1.0,
+      false,
+      paint,
+    );
+
+    // Draw the horizontal bar of the G (blue)
+    final Paint barPaint = Paint()
+      ..color = blue
+      ..style = PaintingStyle.fill;
+
+    canvas.drawRect(
+      Rect.fromLTWH(
+        s * 0.5,
+        s * 0.41,
+        s * 0.4,
+        strokeWidth,
+      ),
+      barPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

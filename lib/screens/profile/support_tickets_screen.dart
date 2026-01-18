@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import '../../theme/colors.dart';
+import '../../services/user_service.dart';
 
-/// Support Tickets Screen - Demo workflow
+/// Support Tickets Screen - Dynamic with API
 class SupportTicketsScreen extends StatefulWidget {
   const SupportTicketsScreen({super.key});
 
@@ -11,16 +13,62 @@ class SupportTicketsScreen extends StatefulWidget {
 }
 
 class _SupportTicketsScreenState extends State<SupportTicketsScreen> {
-  final List<_Ticket> _tickets = [
-    _Ticket(id: '#TKT-001234', subject: 'Deposit not credited', status: 'In Progress', date: 'Dec 28, 2024', priority: 'High'),
-    _Ticket(id: '#TKT-001198', subject: 'KYC verification question', status: 'Resolved', date: 'Dec 20, 2024', priority: 'Medium'),
-    _Ticket(id: '#TKT-001156', subject: 'Unable to withdraw', status: 'Resolved', date: 'Dec 15, 2024', priority: 'High'),
-  ];
+  List<SupportTicket> _tickets = [];
+  bool _isLoading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTickets();
+  }
+
+  Future<void> _loadTickets() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      final tickets = await userService.getTickets();
+      if (mounted) {
+        setState(() {
+          _tickets = tickets;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = e.toString().replaceAll('Exception: ', '');
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  String _formatDate(DateTime date) {
+    final now = DateTime.now();
+    final diff = now.difference(date);
+
+    if (diff.inMinutes < 1) {
+      return 'Just now';
+    } else if (diff.inMinutes < 60) {
+      return '${diff.inMinutes}m ago';
+    } else if (diff.inHours < 24) {
+      return '${diff.inHours}h ago';
+    } else if (diff.inDays < 7) {
+      return '${diff.inDays}d ago';
+    } else {
+      return DateFormat('MMM d, yyyy').format(date);
+    }
+  }
 
   void _showNewTicketDialog() {
     final subjectController = TextEditingController();
     final descriptionController = TextEditingController();
     String selectedCategory = 'Deposit/Withdrawal';
+    bool isSubmitting = false;
 
     showModalBottomSheet(
       context: context,
@@ -109,26 +157,61 @@ class _SupportTicketsScreenState extends State<SupportTicketsScreen> {
                   width: double.infinity,
                   height: 50,
                   child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      setState(() {
-                        _tickets.insert(0, _Ticket(
-                          id: '#TKT-00${1235 + _tickets.length}',
-                          subject: subjectController.text.isEmpty ? 'New Issue' : subjectController.text,
-                          status: 'Open',
-                          date: 'Just now',
-                          priority: 'Medium',
-                        ));
-                      });
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: const Text('Ticket submitted successfully!'), backgroundColor: AppColors.success),
-                      );
-                    },
+                    onPressed: isSubmitting
+                        ? null
+                        : () async {
+                            if (subjectController.text.trim().isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Please enter a subject'), backgroundColor: Colors.red),
+                              );
+                              return;
+                            }
+                            if (descriptionController.text.trim().isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Please enter a description'), backgroundColor: Colors.red),
+                              );
+                              return;
+                            }
+
+                            setModalState(() => isSubmitting = true);
+
+                            try {
+                              await userService.createTicket(
+                                subject: subjectController.text.trim(),
+                                category: selectedCategory,
+                                message: descriptionController.text.trim(),
+                              );
+
+                              if (mounted) {
+                                Navigator.pop(context);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: const Text('Ticket submitted successfully!'), backgroundColor: AppColors.success),
+                                );
+                                _loadTickets();
+                              }
+                            } catch (e) {
+                              setModalState(() => isSubmitting = false);
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Failed to submit ticket: ${e.toString().replaceAll('Exception: ', '')}'),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
+                              }
+                            }
+                          },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
-                    child: const Text('Submit Ticket', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16)),
+                    child: isSubmitting
+                        ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+                          )
+                        : const Text('Submit Ticket', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16)),
                   ),
                 ),
               ],
@@ -141,58 +224,99 @@ class _SupportTicketsScreenState extends State<SupportTicketsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgColor = isDark ? Colors.black : AppColors.lightBackgroundPrimary;
+    final textColor = isDark ? Colors.white : const Color(0xFF000000);
+    final subtextColor = isDark ? Colors.grey[600] : const Color(0xFF333333);
+    final cardBgColor = isDark ? const Color(0xFF0D0D0D) : const Color(0xFFF5F5F5);
+
+    final activeCount = _tickets.where((t) => t.status == 'open' || t.status == 'in_progress').length;
+    final resolvedCount = _tickets.where((t) => t.status == 'resolved' || t.status == 'closed').length;
+
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: bgColor,
       appBar: AppBar(
-        backgroundColor: Colors.black,
+        backgroundColor: bgColor,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          icon: Icon(Icons.arrow_back, color: textColor),
           onPressed: () => context.pop(),
         ),
-        title: const Text('Support Tickets', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+        title: Text('Support Tickets', style: TextStyle(color: textColor, fontWeight: FontWeight.w600)),
       ),
-      body: Column(
-        children: [
-          // Stats
-          Container(
-            margin: const EdgeInsets.all(16),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: const Color(0xFF0D0D0D),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _StatItem(value: '${_tickets.length}', label: 'Total', color: Colors.white),
-                _StatItem(value: '${_tickets.where((t) => t.status == 'Open' || t.status == 'In Progress').length}', label: 'Active', color: Colors.orange),
-                _StatItem(value: '${_tickets.where((t) => t.status == 'Resolved').length}', label: 'Resolved', color: AppColors.tradingBuy),
-              ],
-            ),
-          ),
-          // Tickets List
-          Expanded(
-            child: _tickets.isEmpty
+      body: RefreshIndicator(
+        onRefresh: _loadTickets,
+        color: AppColors.primary,
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : _error != null && _tickets.isEmpty
                 ? Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.support_agent, size: 64, color: Colors.grey[700]),
+                        Icon(Icons.error_outline, size: 48, color: subtextColor),
+                        const SizedBox(height: 12),
+                        Text(_error!, style: TextStyle(color: subtextColor)),
                         const SizedBox(height: 16),
-                        Text('No tickets yet', style: TextStyle(color: Colors.grey[600], fontSize: 16)),
-                        const SizedBox(height: 8),
-                        Text('Create a ticket if you need help', style: TextStyle(color: Colors.grey[700], fontSize: 13)),
+                        ElevatedButton(
+                          onPressed: _loadTickets,
+                          child: const Text('Retry'),
+                        ),
                       ],
                     ),
                   )
-                : ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: _tickets.length,
-                    itemBuilder: (context, index) => _TicketCard(ticket: _tickets[index]),
+                : Column(
+                    children: [
+                      // Stats
+                      Container(
+                        margin: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: cardBgColor,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceAround,
+                          children: [
+                            _StatItem(value: '${_tickets.length}', label: 'Total', color: textColor),
+                            _StatItem(value: '$activeCount', label: 'Active', color: Colors.orange),
+                            _StatItem(value: '$resolvedCount', label: 'Resolved', color: AppColors.tradingBuy),
+                          ],
+                        ),
+                      ),
+                      // Tickets List
+                      Expanded(
+                        child: _tickets.isEmpty
+                            ? Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.support_agent, size: 64, color: subtextColor),
+                                    const SizedBox(height: 16),
+                                    Text('No tickets yet', style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w600)),
+                                    const SizedBox(height: 8),
+                                    Text('Create a ticket if you need help', style: TextStyle(color: subtextColor, fontSize: 13)),
+                                  ],
+                                ),
+                              )
+                            : ListView.builder(
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                itemCount: _tickets.length,
+                                itemBuilder: (context, index) {
+                                  final ticket = _tickets[index];
+                                  return _TicketCard(
+                                    id: '#TKT-${ticket.id.substring(0, 6).toUpperCase()}',
+                                    subject: ticket.subject,
+                                    status: ticket.status.capitalize(),
+                                    date: _formatDate(ticket.createdAt),
+                                    priority: ticket.priority.capitalize(),
+                                    isDark: isDark,
+                                  );
+                                },
+                              ),
+                      ),
+                    ],
                   ),
-          ),
-        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _showNewTicketDialog,
@@ -204,14 +328,11 @@ class _SupportTicketsScreenState extends State<SupportTicketsScreen> {
   }
 }
 
-class _Ticket {
-  final String id;
-  final String subject;
-  final String status;
-  final String date;
-  final String priority;
-
-  const _Ticket({required this.id, required this.subject, required this.status, required this.date, required this.priority});
+extension StringCapitalize on String {
+  String capitalize() {
+    if (isEmpty) return this;
+    return '${this[0].toUpperCase()}${substring(1).toLowerCase()}';
+  }
 }
 
 class _StatItem extends StatelessWidget {
@@ -223,27 +344,42 @@ class _StatItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Column(
       children: [
         Text(value, style: TextStyle(color: color, fontSize: 24, fontWeight: FontWeight.bold)),
-        Text(label, style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+        Text(label, style: TextStyle(color: isDark ? Colors.grey[600] : const Color(0xFF333333), fontSize: 12)),
       ],
     );
   }
 }
 
 class _TicketCard extends StatelessWidget {
-  final _Ticket ticket;
+  final String id;
+  final String subject;
+  final String status;
+  final String date;
+  final String priority;
+  final bool isDark;
 
-  const _TicketCard({required this.ticket});
+  const _TicketCard({
+    required this.id,
+    required this.subject,
+    required this.status,
+    required this.date,
+    required this.priority,
+    required this.isDark,
+  });
 
   Color get _statusColor {
-    switch (ticket.status) {
-      case 'Open':
+    switch (status.toLowerCase()) {
+      case 'open':
         return Colors.blue;
-      case 'In Progress':
+      case 'in_progress':
+      case 'in progress':
         return Colors.orange;
-      case 'Resolved':
+      case 'resolved':
+      case 'closed':
         return AppColors.tradingBuy;
       default:
         return Colors.grey;
@@ -251,12 +387,12 @@ class _TicketCard extends StatelessWidget {
   }
 
   Color get _priorityColor {
-    switch (ticket.priority) {
-      case 'High':
+    switch (priority.toLowerCase()) {
+      case 'high':
         return AppColors.tradingSell;
-      case 'Medium':
+      case 'medium':
         return Colors.orange;
-      case 'Low':
+      case 'low':
         return AppColors.tradingBuy;
       default:
         return Colors.grey;
@@ -265,20 +401,25 @@ class _TicketCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final textColor = isDark ? Colors.white : const Color(0xFF000000);
+    final subtextColor = isDark ? Colors.grey[600] : const Color(0xFF333333);
+    final cardBgColor = isDark ? const Color(0xFF0D0D0D) : const Color(0xFFF5F5F5);
+    final borderColor = isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.08);
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF0D0D0D),
+        color: cardBgColor,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withOpacity(0.05)),
+        border: Border.all(color: borderColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Text(ticket.id, style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600)),
+              Text(id, style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600)),
               const Spacer(),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -286,18 +427,18 @@ class _TicketCard extends StatelessWidget {
                   color: _statusColor.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Text(ticket.status, style: TextStyle(color: _statusColor, fontSize: 11, fontWeight: FontWeight.w600)),
+                child: Text(status, style: TextStyle(color: _statusColor, fontSize: 11, fontWeight: FontWeight.w600)),
               ),
             ],
           ),
           const SizedBox(height: 8),
-          Text(ticket.subject, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500, fontSize: 15)),
+          Text(subject, style: TextStyle(color: textColor, fontWeight: FontWeight.w500, fontSize: 15)),
           const SizedBox(height: 8),
           Row(
             children: [
-              Icon(Icons.access_time, color: Colors.grey[600], size: 14),
+              Icon(Icons.access_time, color: subtextColor, size: 14),
               const SizedBox(width: 4),
-              Text(ticket.date, style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+              Text(date, style: TextStyle(color: subtextColor, fontSize: 12)),
               const SizedBox(width: 16),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -305,7 +446,7 @@ class _TicketCard extends StatelessWidget {
                   color: _priorityColor.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(4),
                 ),
-                child: Text(ticket.priority, style: TextStyle(color: _priorityColor, fontSize: 10, fontWeight: FontWeight.w600)),
+                child: Text(priority, style: TextStyle(color: _priorityColor, fontSize: 10, fontWeight: FontWeight.w600)),
               ),
             ],
           ),
