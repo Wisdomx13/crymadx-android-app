@@ -9,7 +9,6 @@ import '../../navigation/app_router.dart';
 import '../../theme/colors.dart';
 import '../../services/crypto_service.dart';
 import '../../providers/balance_provider.dart';
-import 'order_entry_screen.dart';
 
 /// Professional Bybit-style Spot Trading Screen
 class TradingScreen extends StatefulWidget {
@@ -1424,19 +1423,14 @@ class _TradingScreenState extends State<TradingScreen> with TickerProviderStateM
   }
 
   void _showTradeSheet(bool isBuy) {
-    // Navigate to full-screen order entry screen
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => OrderEntryScreen(
-          symbol: _symbol,
-          baseAsset: _baseAsset,
-          quoteAsset: _quoteAsset,
-          isBuy: isBuy,
-          currentPrice: _lastPrice,
-        ),
-      ),
-    );
+    // Navigate to full-screen order entry screen (outside ShellRoute)
+    context.push('/order-entry', extra: {
+      'symbol': _symbol,
+      'baseAsset': _baseAsset,
+      'quoteAsset': _quoteAsset,
+      'isBuy': isBuy,
+      'currentPrice': _lastPrice,
+    });
   }
 
   void _showConvertSheet() {

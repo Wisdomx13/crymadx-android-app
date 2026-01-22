@@ -528,13 +528,28 @@ class _NFTScreenState extends State<NFTScreen> with SingleTickerProviderStateMix
   }
 
   Widget _buildErrorWidget(String error, VoidCallback onRetry) {
+    // Clean up error message - detect HTML responses and show friendly message
+    String displayError = error;
+    if (error.contains('<!DOCTYPE') || error.contains('<html') || error.contains('Cannot GET')) {
+      displayError = 'Service temporarily unavailable. Please try again later.';
+    } else if (error.contains('Exception:')) {
+      displayError = error.replaceAll('Exception:', '').trim();
+    }
+
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(Icons.error_outline, size: 48, color: Colors.grey[600]),
           const SizedBox(height: 16),
-          Text(error, style: TextStyle(color: Colors.grey[600])),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Text(
+              displayError,
+              style: TextStyle(color: Colors.grey[600]),
+              textAlign: TextAlign.center,
+            ),
+          ),
           const SizedBox(height: 16),
           ElevatedButton(
             onPressed: onRetry,

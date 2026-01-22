@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../theme/colors.dart';
 import '../../theme/typography.dart';
 import '../../theme/spacing.dart';
@@ -9,6 +10,213 @@ import '../../widgets/glass_card.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/crypto_icon.dart';
 import '../../services/wallet_service.dart';
+
+/// Network icon data with logo URL and fallback color
+class NetworkIconData {
+  final String? logoUrl;
+  final Color color;
+  final IconData fallbackIcon;
+
+  const NetworkIconData({
+    this.logoUrl,
+    required this.color,
+    this.fallbackIcon = Icons.hub,
+  });
+}
+
+/// Get network icon data for a specific network
+NetworkIconData getNetworkIconData(String network) {
+  final networkLower = network.toLowerCase();
+
+  // Network logo URLs and colors
+  switch (networkLower) {
+    // Bitcoin networks
+    case 'bitcoin':
+      return NetworkIconData(
+        logoUrl: 'https://cryptologos.cc/logos/bitcoin-btc-logo.png',
+        color: const Color(0xFFF7931A),
+      );
+    case 'lightning':
+      return NetworkIconData(
+        logoUrl: 'https://cryptologos.cc/logos/lightning-network-logo.png',
+        color: const Color(0xFFF7931A),
+        fallbackIcon: Icons.bolt,
+      );
+
+    // Ethereum & EVM networks
+    case 'erc20':
+    case 'ethereum':
+      return NetworkIconData(
+        logoUrl: 'https://cryptologos.cc/logos/ethereum-eth-logo.png',
+        color: const Color(0xFF627EEA),
+      );
+    case 'bep20':
+    case 'bep2':
+    case 'bnb':
+    case 'binance':
+      return NetworkIconData(
+        logoUrl: 'https://cryptologos.cc/logos/bnb-bnb-logo.png',
+        color: const Color(0xFFF0B90B),
+      );
+    case 'trc20':
+    case 'tron':
+      return NetworkIconData(
+        logoUrl: 'https://cryptologos.cc/logos/tron-trx-logo.png',
+        color: const Color(0xFFFF0013),
+      );
+    case 'polygon':
+    case 'matic':
+      return NetworkIconData(
+        logoUrl: 'https://cryptologos.cc/logos/polygon-matic-logo.png',
+        color: const Color(0xFF8247E5),
+      );
+    case 'arbitrum':
+      return NetworkIconData(
+        logoUrl: 'https://cryptologos.cc/logos/arbitrum-arb-logo.png',
+        color: const Color(0xFF28A0F0),
+      );
+    case 'optimism':
+      return NetworkIconData(
+        logoUrl: 'https://cryptologos.cc/logos/optimism-ethereum-op-logo.png',
+        color: const Color(0xFFFF0420),
+      );
+    case 'base':
+      return NetworkIconData(
+        logoUrl: 'https://raw.githubusercontent.com/base-org/brand-kit/main/logo/symbol/Base_Symbol_Blue.png',
+        color: const Color(0xFF0052FF),
+      );
+    case 'avalanche':
+    case 'avalanche c-chain':
+      return NetworkIconData(
+        logoUrl: 'https://cryptologos.cc/logos/avalanche-avax-logo.png',
+        color: const Color(0xFFE84142),
+      );
+
+    // Other networks
+    case 'solana':
+      return NetworkIconData(
+        logoUrl: 'https://cryptologos.cc/logos/solana-sol-logo.png',
+        color: const Color(0xFF00FFA3),
+      );
+    case 'ton':
+      return NetworkIconData(
+        logoUrl: 'https://cryptologos.cc/logos/toncoin-ton-logo.png',
+        color: const Color(0xFF0098EA),
+      );
+    case 'cardano':
+      return NetworkIconData(
+        logoUrl: 'https://cryptologos.cc/logos/cardano-ada-logo.png',
+        color: const Color(0xFF0033AD),
+      );
+    case 'xrp ledger':
+    case 'xrp':
+      return NetworkIconData(
+        logoUrl: 'https://cryptologos.cc/logos/xrp-xrp-logo.png',
+        color: const Color(0xFF23292F),
+      );
+    case 'stellar':
+      return NetworkIconData(
+        logoUrl: 'https://cryptologos.cc/logos/stellar-xlm-logo.png',
+        color: const Color(0xFF000000),
+      );
+    case 'cosmos':
+      return NetworkIconData(
+        logoUrl: 'https://cryptologos.cc/logos/cosmos-atom-logo.png',
+        color: const Color(0xFF2E3148),
+      );
+    case 'polkadot':
+      return NetworkIconData(
+        logoUrl: 'https://cryptologos.cc/logos/polkadot-new-dot-logo.png',
+        color: const Color(0xFFE6007A),
+      );
+    case 'near':
+      return NetworkIconData(
+        logoUrl: 'https://cryptologos.cc/logos/near-protocol-near-logo.png',
+        color: const Color(0xFF000000),
+      );
+    case 'fantom':
+      return NetworkIconData(
+        logoUrl: 'https://cryptologos.cc/logos/fantom-ftm-logo.png',
+        color: const Color(0xFF1969FF),
+      );
+    case 'zksync era':
+    case 'zksync':
+      return NetworkIconData(
+        logoUrl: 'https://raw.githubusercontent.com/matter-labs/web3-icons/main/icons/default/zksync.svg',
+        color: const Color(0xFF8C8DFC),
+      );
+    case 'litecoin':
+      return NetworkIconData(
+        logoUrl: 'https://cryptologos.cc/logos/litecoin-ltc-logo.png',
+        color: const Color(0xFFBFBBBB),
+      );
+    case 'bitcoin cash':
+      return NetworkIconData(
+        logoUrl: 'https://cryptologos.cc/logos/bitcoin-cash-bch-logo.png',
+        color: const Color(0xFF8DC351),
+      );
+    case 'dogecoin':
+      return NetworkIconData(
+        logoUrl: 'https://cryptologos.cc/logos/dogecoin-doge-logo.png',
+        color: const Color(0xFFC2A633),
+      );
+
+    // Default
+    default:
+      return NetworkIconData(
+        color: AppColors.primary,
+      );
+  }
+}
+
+/// Widget to display network icon with logo or fallback
+class NetworkIcon extends StatelessWidget {
+  final String network;
+  final double size;
+
+  const NetworkIcon({
+    super.key,
+    required this.network,
+    this.size = 40,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final data = getNetworkIconData(network);
+
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: data.color.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(size * 0.25),
+      ),
+      child: Center(
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(size * 0.2),
+          child: data.logoUrl != null
+              ? CachedNetworkImage(
+                  imageUrl: data.logoUrl!,
+                  width: size * 0.6,
+                  height: size * 0.6,
+                  fit: BoxFit.contain,
+                  placeholder: (context, url) => _buildFallback(data),
+                  errorWidget: (context, url, error) => _buildFallback(data),
+                )
+              : _buildFallback(data),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFallback(NetworkIconData data) {
+    return Icon(
+      data.fallbackIcon,
+      color: data.color,
+      size: size * 0.5,
+    );
+  }
+}
 
 // Comprehensive crypto asset data with networks
 class CryptoAsset {
@@ -813,19 +1021,7 @@ class _DepositScreenState extends State<DepositScreen> {
                     ),
                     child: Row(
                       children: [
-                        Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: AppColors.primary.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Icon(
-                            Icons.hub,
-                            color: AppColors.primary,
-                            size: 20,
-                          ),
-                        ),
+                        NetworkIcon(network: network, size: 40),
                         const SizedBox(width: 14),
                         Expanded(
                           child: Column(

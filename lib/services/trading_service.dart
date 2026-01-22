@@ -527,6 +527,42 @@ class TradingService {
   }
 
   // ============================================
+  // ORDER BOOK
+  // ============================================
+
+  /// Get order book for a symbol
+  Future<Map<String, dynamic>> getOrderBook(String symbol, {int limit = 20}) async {
+    try {
+      final response = await _api.get(
+        '${ApiConfig.spotPairs}/$symbol/orderbook',
+        queryParameters: {'limit': limit},
+      );
+
+      final List<dynamic> bidsData = response['bids'] ?? [];
+      final List<dynamic> asksData = response['asks'] ?? [];
+
+      return {
+        'bids': bidsData.map((e) {
+          if (e is List) {
+            return {'price': double.tryParse(e[0].toString()) ?? 0, 'quantity': double.tryParse(e[1].toString()) ?? 0};
+          }
+          return {'price': (e['price'] ?? 0).toDouble(), 'quantity': (e['quantity'] ?? e['qty'] ?? 0).toDouble()};
+        }).toList(),
+        'asks': asksData.map((e) {
+          if (e is List) {
+            return {'price': double.tryParse(e[0].toString()) ?? 0, 'quantity': double.tryParse(e[1].toString()) ?? 0};
+          }
+          return {'price': (e['price'] ?? 0).toDouble(), 'quantity': (e['quantity'] ?? e['qty'] ?? 0).toDouble()};
+        }).toList(),
+        'lastPrice': response['lastPrice'] ?? response['last_price'],
+      };
+    } catch (e) {
+      // Return empty order book on error
+      return {'bids': [], 'asks': [], 'lastPrice': null};
+    }
+  }
+
+  // ============================================
   // QUICK TRADE HELPERS
   // ============================================
 

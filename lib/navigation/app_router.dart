@@ -17,6 +17,7 @@ import '../screens/main/stake_screen.dart';
 import '../screens/main/quick_actions_screen.dart';
 import '../screens/main/nft_screen.dart';
 import '../screens/main/fiat_screen.dart';
+import '../screens/main/order_entry_screen.dart';
 import '../screens/wallet/deposit_screen.dart';
 import '../screens/wallet/withdraw_screen.dart';
 import '../screens/wallet/transfer_screen.dart';
@@ -64,6 +65,7 @@ class AppRoutes {
   static const String coinDetail = '/coin-detail';
   static const String nft = '/nft';
   static const String fiat = '/fiat';
+  static const String orderEntry = '/order-entry';
 }
 
 /// Main app router
@@ -243,6 +245,19 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: AppRoutes.fiat,
       builder: (context, state) => const FiatScreen(),
+    ),
+    GoRoute(
+      path: AppRoutes.orderEntry,
+      builder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>?;
+        return OrderEntryScreen(
+          symbol: extra?['symbol'] ?? 'BTCUSDT',
+          baseAsset: extra?['baseAsset'] ?? 'BTC',
+          quoteAsset: extra?['quoteAsset'] ?? 'USDT',
+          isBuy: extra?['isBuy'] ?? true,
+          currentPrice: (extra?['currentPrice'] ?? 0.0).toDouble(),
+        );
+      },
     ),
   ],
 
