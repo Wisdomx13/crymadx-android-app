@@ -548,63 +548,66 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
     showModalBottomSheet(
       context: context,
       backgroundColor: sheetBg,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (context) => Padding(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Add Payment Method',
-                  style: AppTypography.titleLarge.copyWith(
-                    color: textColor,
-                    fontWeight: FontWeight.w700,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Add Payment Method',
+                    style: AppTypography.titleLarge.copyWith(
+                      color: textColor,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                ),
-                GestureDetector(
-                  onTap: () => Navigator.pop(context),
-                  child: Icon(Icons.close, color: textColor),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            _buildPaymentTypeOption(
-              icon: Icons.credit_card,
-              label: 'Credit/Debit Card',
-              subtitle: 'Visa, Mastercard, etc.',
-              color: Colors.blue,
-              onTap: () {
-                Navigator.pop(context);
-                _showAddCardModal();
-              },
-            ),
-            _buildPaymentTypeOption(
-              icon: Icons.account_balance,
-              label: 'Bank Account',
-              subtitle: 'Link your bank account',
-              color: AppColors.info,
-              onTap: () {
-                Navigator.pop(context);
-                _showAddBankModal();
-              },
-            ),
-            _buildPaymentTypeOption(
-              icon: Icons.phone_android,
-              label: 'Mobile Wallet',
-              subtitle: 'Apple Pay, Google Pay',
-              color: AppColors.tradingBuy,
-              onTap: () {
-                Navigator.pop(context);
-                _showMobileWalletModal();
-              },
-            ),
-            const SizedBox(height: AppSpacing.lg),
-          ],
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Icon(Icons.close, color: textColor),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              _buildPaymentTypeOption(
+                icon: Icons.credit_card,
+                label: 'Credit/Debit Card',
+                subtitle: 'Visa, Mastercard, etc.',
+                color: Colors.blue,
+                onTap: () {
+                  Navigator.pop(context);
+                  _showAddCardModal();
+                },
+              ),
+              _buildPaymentTypeOption(
+                icon: Icons.account_balance,
+                label: 'Bank Account',
+                subtitle: 'Link your bank account',
+                color: AppColors.info,
+                onTap: () {
+                  Navigator.pop(context);
+                  _showAddBankModal();
+                },
+              ),
+              _buildPaymentTypeOption(
+                icon: Icons.phone_android,
+                label: 'Mobile Wallet',
+                subtitle: 'Apple Pay, Google Pay',
+                color: AppColors.tradingBuy,
+                onTap: () {
+                  Navigator.pop(context);
+                  _showMobileWalletModal();
+                },
+              ),
+              const SizedBox(height: AppSpacing.md),
+            ],
+          ),
         ),
       ),
     );
@@ -688,14 +691,15 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(
-          left: AppSpacing.lg,
-          right: AppSpacing.lg,
-          top: AppSpacing.lg,
-          bottom: MediaQuery.of(context).viewInsets.bottom + AppSpacing.lg,
-        ),
-        child: SingleChildScrollView(
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: EdgeInsets.only(
+            left: AppSpacing.lg,
+            right: AppSpacing.lg,
+            top: AppSpacing.lg,
+            bottom: MediaQuery.of(context).viewInsets.bottom + AppSpacing.lg,
+          ),
+          child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -798,6 +802,7 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
             ],
           ),
         ),
+        ),
       ),
     );
   }
@@ -819,23 +824,24 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(
-          left: AppSpacing.lg,
-          right: AppSpacing.lg,
-          top: AppSpacing.lg,
-          bottom: MediaQuery.of(context).viewInsets.bottom + AppSpacing.lg,
-        ),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Add Bank Account',
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: EdgeInsets.only(
+            left: AppSpacing.lg,
+            right: AppSpacing.lg,
+            top: AppSpacing.lg,
+            bottom: MediaQuery.of(context).viewInsets.bottom + AppSpacing.lg,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Add Bank Account',
                     style: AppTypography.titleLarge.copyWith(
                       color: textColor,
                       fontWeight: FontWeight.w700,

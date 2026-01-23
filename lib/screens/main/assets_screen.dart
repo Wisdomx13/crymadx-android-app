@@ -180,13 +180,6 @@ class _AssetsScreenState extends State<AssetsScreen> {
                       ),
                       Expanded(
                         child: _buildActionButton(
-                          icon: Icons.swap_horiz_rounded,
-                          label: 'Transfer',
-                          onTap: () => context.push(AppRoutes.transfer),
-                        ),
-                      ),
-                      Expanded(
-                        child: _buildActionButton(
                           icon: Icons.refresh_rounded,
                           label: 'Convert',
                           onTap: () => context.push(AppRoutes.convert),

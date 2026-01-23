@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../theme/colors.dart';
 import '../../widgets/widgets.dart';
+import '../../services/staking_service.dart';
 
-/// Stake Screen - Binance-style crypto staking
+/// Stake Screen - Binance-style crypto staking with real API data
 class StakeScreen extends StatefulWidget {
   const StakeScreen({super.key});
 
@@ -16,30 +17,76 @@ class _StakeScreenState extends State<StakeScreen> with SingleTickerProviderStat
   int _selectedTab = 0;
   String _sortBy = 'APY';
 
-  // Staking products
-  final List<StakeProduct> _stakingProducts = [
-    StakeProduct(symbol: 'ETH', name: 'Ethereum', apy: 4.5, minStake: 0.01, totalStaked: 2450000, validators: 128, lockPeriod: 0, isLiquid: true),
-    StakeProduct(symbol: 'SOL', name: 'Solana', apy: 7.2, minStake: 1, totalStaked: 8500000, validators: 256, lockPeriod: 0, isLiquid: true),
-    StakeProduct(symbol: 'ADA', name: 'Cardano', apy: 5.1, minStake: 10, totalStaked: 3200000, validators: 89, lockPeriod: 0, isLiquid: true),
-    StakeProduct(symbol: 'DOT', name: 'Polkadot', apy: 12.5, minStake: 1, totalStaked: 1800000, validators: 64, lockPeriod: 28, isLiquid: false),
-    StakeProduct(symbol: 'ATOM', name: 'Cosmos', apy: 18.2, minStake: 0.1, totalStaked: 950000, validators: 175, lockPeriod: 21, isLiquid: false),
-    StakeProduct(symbol: 'AVAX', name: 'Avalanche', apy: 8.9, minStake: 1, totalStaked: 2100000, validators: 112, lockPeriod: 14, isLiquid: false),
-    StakeProduct(symbol: 'MATIC', name: 'Polygon', apy: 5.8, minStake: 1, totalStaked: 4500000, validators: 98, lockPeriod: 0, isLiquid: true),
-    StakeProduct(symbol: 'NEAR', name: 'NEAR Protocol', apy: 9.5, minStake: 1, totalStaked: 780000, validators: 85, lockPeriod: 0, isLiquid: true),
-    StakeProduct(symbol: 'FTM', name: 'Fantom', apy: 13.8, minStake: 1, totalStaked: 520000, validators: 52, lockPeriod: 7, isLiquid: false),
-    StakeProduct(symbol: 'ALGO', name: 'Algorand', apy: 6.2, minStake: 1, totalStaked: 890000, validators: 120, lockPeriod: 0, isLiquid: true),
-  ];
+  // API data
+  List<StakingProduct> _stakingProducts = [];
+  List<StakingPosition> _myPositions = [];
+  bool _isLoading = true;
+  bool _isPositionsLoading = true;
+  String? _error;
 
-  // User's staked positions (demo)
-  final List<StakedPosition> _myPositions = [
-    StakedPosition(symbol: 'ETH', amount: 2.5, apy: 4.5, startDate: DateTime.now().subtract(const Duration(days: 30)), rewards: 0.0092),
-    StakedPosition(symbol: 'SOL', amount: 50, apy: 7.2, startDate: DateTime.now().subtract(const Duration(days: 15)), rewards: 0.148),
-  ];
+  // Summary data
+  double _totalStaked = 0;
+  double _totalRewards = 0;
+  double _avgApy = 0;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    await Future.wait([
+      _loadProducts(),
+      _loadPositions(),
+    ]);
+  }
+
+  Future<void> _loadProducts() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      final products = await stakingService.getProducts();
+      if (mounted) {
+        setState(() {
+          _stakingProducts = products;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = e.toString().replaceAll('Exception: ', '');
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _loadPositions() async {
+    setState(() => _isPositionsLoading = true);
+
+    try {
+      final positions = await stakingService.getPositions();
+      final summary = await stakingService.getSummary();
+      if (mounted) {
+        setState(() {
+          _myPositions = positions;
+          _totalStaked = summary['totalStaked'] ?? 0;
+          _totalRewards = summary['totalRewards'] ?? 0;
+          _avgApy = summary['avgApy'] ?? 0;
+          _isPositionsLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isPositionsLoading = false);
+      }
+    }
   }
 
   @override
@@ -48,8 +95,8 @@ class _StakeScreenState extends State<StakeScreen> with SingleTickerProviderStat
     super.dispose();
   }
 
-  List<StakeProduct> get _filteredProducts {
-    var products = List<StakeProduct>.from(_stakingProducts);
+  List<StakingProduct> get _filteredProducts {
+    var products = List<StakingProduct>.from(_stakingProducts);
 
     // Filter by tab
     if (_selectedTab == 1) {
@@ -62,7 +109,7 @@ class _StakeScreenState extends State<StakeScreen> with SingleTickerProviderStat
     if (_sortBy == 'APY') {
       products.sort((a, b) => b.apy.compareTo(a.apy));
     } else if (_sortBy == 'TVL') {
-      products.sort((a, b) => b.totalStaked.compareTo(a.totalStaked));
+      products.sort((a, b) => b.availablePool.compareTo(a.availablePool));
     }
 
     return products;
@@ -117,9 +164,6 @@ class _StakeScreenState extends State<StakeScreen> with SingleTickerProviderStat
   }
 
   Widget _buildSummaryCard() {
-    final totalStaked = _myPositions.fold<double>(0, (sum, p) => sum + (p.amount * _getPrice(p.symbol)));
-    final totalRewards = _myPositions.fold<double>(0, (sum, p) => sum + (p.rewards * _getPrice(p.symbol)));
-
     return Container(
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(20),
@@ -147,7 +191,7 @@ class _StakeScreenState extends State<StakeScreen> with SingleTickerProviderStat
                   Text('Total Staked Value', style: TextStyle(color: Colors.grey[400], fontSize: 12)),
                   const SizedBox(height: 4),
                   Text(
-                    '\$${totalStaked.toStringAsFixed(2)}',
+                    '\$${_totalStaked.toStringAsFixed(2)}',
                     style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w700),
                   ),
                 ],
@@ -162,7 +206,7 @@ class _StakeScreenState extends State<StakeScreen> with SingleTickerProviderStat
                   children: [
                     Icon(Icons.trending_up, color: AppColors.success, size: 16),
                     const SizedBox(width: 4),
-                    Text('+\$${totalRewards.toStringAsFixed(2)}', style: TextStyle(color: AppColors.success, fontSize: 13, fontWeight: FontWeight.w600)),
+                    Text('+\$${_totalRewards.toStringAsFixed(2)}', style: TextStyle(color: AppColors.success, fontSize: 13, fontWeight: FontWeight.w600)),
                   ],
                 ),
               ),
@@ -182,14 +226,14 @@ class _StakeScreenState extends State<StakeScreen> with SingleTickerProviderStat
                 child: _SummaryItem(
                   icon: Icons.card_giftcard,
                   label: 'Total Rewards',
-                  value: '\$${totalRewards.toStringAsFixed(4)}',
+                  value: '\$${_totalRewards.toStringAsFixed(4)}',
                 ),
               ),
               Expanded(
                 child: _SummaryItem(
                   icon: Icons.percent,
                   label: 'Avg APY',
-                  value: '${_myPositions.isEmpty ? 0 : (_myPositions.fold<double>(0, (sum, p) => sum + p.apy) / _myPositions.length).toStringAsFixed(1)}%',
+                  value: '${_avgApy.toStringAsFixed(1)}%',
                 ),
               ),
             ],
@@ -252,12 +296,52 @@ class _StakeScreenState extends State<StakeScreen> with SingleTickerProviderStat
   }
 
   Widget _buildProductsList() {
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      itemCount: _filteredProducts.length,
-      itemBuilder: (context, index) => _StakeProductCard(
-        product: _filteredProducts[index],
-        onStake: () => _showStakeDialog(_filteredProducts[index]),
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_error != null && _stakingProducts.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.error_outline, color: Colors.grey[600], size: 48),
+            const SizedBox(height: 16),
+            Text('Failed to load staking products', style: TextStyle(color: Colors.grey[500])),
+            const SizedBox(height: 8),
+            ElevatedButton(
+              onPressed: _loadProducts,
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+              child: const Text('Retry', style: TextStyle(color: Colors.black)),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_filteredProducts.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.savings_outlined, color: Colors.grey[600], size: 48),
+            const SizedBox(height: 16),
+            Text('No staking products available', style: TextStyle(color: Colors.grey[500])),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadProducts,
+      color: AppColors.primary,
+      child: ListView.builder(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: _filteredProducts.length,
+        itemBuilder: (context, index) => _StakeProductCard(
+          product: _filteredProducts[index],
+          onStake: () => _showStakeDialog(_filteredProducts[index]),
+        ),
       ),
     );
   }
@@ -299,7 +383,7 @@ class _StakeScreenState extends State<StakeScreen> with SingleTickerProviderStat
     );
   }
 
-  void _showStakeDialog(StakeProduct product) {
+  void _showStakeDialog(StakingProduct product) {
     final amountController = TextEditingController();
     bool isProcessing = false;
     int step = 1;
@@ -323,7 +407,7 @@ class _StakeScreenState extends State<StakeScreen> with SingleTickerProviderStat
                   // Header
                   Row(
                     children: [
-                      CryptoIcon(symbol: product.symbol, size: 48),
+                      CryptoIcon(symbol: product.token, size: 48),
                       const SizedBox(width: 16),
                       Expanded(
                         child: Column(
@@ -402,7 +486,7 @@ class _StakeScreenState extends State<StakeScreen> with SingleTickerProviderStat
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.end,
                                 children: [
-                                  Text(product.symbol, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
+                                  Text(product.token, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
                                   Text('Balance: 10.00', style: TextStyle(color: Colors.grey[500], fontSize: 11)),
                                 ],
                               ),
@@ -437,11 +521,11 @@ class _StakeScreenState extends State<StakeScreen> with SingleTickerProviderStat
                         children: [
                           _InfoRow(label: 'APY', value: '${product.apy}%', valueColor: AppColors.success),
                           const SizedBox(height: 12),
-                          _InfoRow(label: 'Min. Stake', value: '${product.minStake} ${product.symbol}'),
+                          _InfoRow(label: 'Min. Stake', value: '${product.minDeposit} ${product.token}'),
                           const SizedBox(height: 12),
-                          _InfoRow(label: 'Lock Period', value: product.lockPeriod == 0 ? 'None (Liquid)' : '${product.lockPeriod} days'),
+                          _InfoRow(label: 'Lock Period', value: product.lockPeriodDays == 0 ? 'None (Liquid)' : '${product.lockPeriodDays} days'),
                           const SizedBox(height: 12),
-                          _InfoRow(label: 'Est. Monthly Rewards', value: '${estimatedRewards.toStringAsFixed(6)} ${product.symbol}', valueColor: AppColors.primary),
+                          _InfoRow(label: 'Est. Monthly Rewards', value: '${estimatedRewards.toStringAsFixed(6)} ${product.token}', valueColor: AppColors.primary),
                         ],
                       ),
                     ),
@@ -454,11 +538,11 @@ class _StakeScreenState extends State<StakeScreen> with SingleTickerProviderStat
                       child: ElevatedButton(
                         onPressed: () {
                           final amount = double.tryParse(amountController.text) ?? 0;
-                          if (amount >= product.minStake) {
+                          if (amount >= product.minDeposit) {
                             setModalState(() => step = 2);
                           } else {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Minimum stake is ${product.minStake} ${product.symbol}'), backgroundColor: AppColors.error),
+                              SnackBar(content: Text('Minimum stake is ${product.minDeposit} ${product.token}'), backgroundColor: AppColors.error),
                             );
                           }
                         },
@@ -485,10 +569,10 @@ class _StakeScreenState extends State<StakeScreen> with SingleTickerProviderStat
                           const SizedBox(height: 16),
                           const Text('Confirm Staking', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600)),
                           const SizedBox(height: 20),
-                          _ConfirmRow(label: 'Amount', value: '${amountController.text} ${product.symbol}'),
+                          _ConfirmRow(label: 'Amount', value: '${amountController.text} ${product.token}'),
                           _ConfirmRow(label: 'APY', value: '${product.apy}%'),
-                          _ConfirmRow(label: 'Lock Period', value: product.lockPeriod == 0 ? 'None' : '${product.lockPeriod} days'),
-                          _ConfirmRow(label: 'Est. Monthly', value: '${estimatedRewards.toStringAsFixed(6)} ${product.symbol}'),
+                          _ConfirmRow(label: 'Lock Period', value: product.lockPeriodDays == 0 ? 'None' : '${product.lockPeriodDays} days'),
+                          _ConfirmRow(label: 'Est. Monthly', value: '${estimatedRewards.toStringAsFixed(6)} ${product.token}'),
                         ],
                       ),
                     ),
@@ -496,7 +580,7 @@ class _StakeScreenState extends State<StakeScreen> with SingleTickerProviderStat
                     const SizedBox(height: 16),
 
                     // Warning
-                    if (product.lockPeriod > 0)
+                    if (product.lockPeriodDays > 0)
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
@@ -510,7 +594,7 @@ class _StakeScreenState extends State<StakeScreen> with SingleTickerProviderStat
                             const SizedBox(width: 12),
                             Expanded(
                               child: Text(
-                                'Your funds will be locked for ${product.lockPeriod} days. Early unstaking may result in penalties.',
+                                'Your funds will be locked for ${product.lockPeriodDays} days. Early unstaking may result in penalties.',
                                 style: TextStyle(color: AppColors.warning, fontSize: 12),
                               ),
                             ),
@@ -574,7 +658,7 @@ class _StakeScreenState extends State<StakeScreen> with SingleTickerProviderStat
                           const Text('Staking Successful!', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w700)),
                           const SizedBox(height: 12),
                           Text(
-                            'You have successfully staked ${amountController.text} ${product.symbol}',
+                            'You have successfully staked ${amountController.text} ${product.token}',
                             style: TextStyle(color: Colors.grey[400], fontSize: 14),
                             textAlign: TextAlign.center,
                           ),
@@ -617,7 +701,7 @@ class _StakeScreenState extends State<StakeScreen> with SingleTickerProviderStat
     );
   }
 
-  void _showUnstakeDialog(StakedPosition position) {
+  void _showUnstakeDialog(StakingPosition position) {
     showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF1A1A1A),
@@ -632,7 +716,7 @@ class _StakeScreenState extends State<StakeScreen> with SingleTickerProviderStat
             const Text('Unstake Funds?', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600)),
             const SizedBox(height: 12),
             Text(
-              'You are about to unstake ${position.amount} ${position.symbol}. You will stop earning rewards on this amount.',
+              'You are about to unstake ${position.amount} ${position.token}. You will stop earning rewards on this amount.',
               style: TextStyle(color: Colors.grey[400], fontSize: 13),
               textAlign: TextAlign.center,
             ),
@@ -656,7 +740,7 @@ class _StakeScreenState extends State<StakeScreen> with SingleTickerProviderStat
                     onPressed: () {
                       Navigator.pop(context);
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Unstaked ${position.amount} ${position.symbol}'), backgroundColor: AppColors.success),
+                        SnackBar(content: Text('Unstaked ${position.amount} ${position.token}'), backgroundColor: AppColors.success),
                       );
                     },
                     style: ElevatedButton.styleFrom(
@@ -675,10 +759,10 @@ class _StakeScreenState extends State<StakeScreen> with SingleTickerProviderStat
     );
   }
 
-  void _claimRewards(StakedPosition position) {
+  void _claimRewards(StakingPosition position) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Claimed ${position.rewards.toStringAsFixed(6)} ${position.symbol} rewards!'),
+        content: Text('Claimed ${position.accruedInterest.toStringAsFixed(6)} ${position.token} rewards!'),
         backgroundColor: AppColors.success,
       ),
     );
@@ -737,49 +821,6 @@ class _StakeScreenState extends State<StakeScreen> with SingleTickerProviderStat
     );
   }
 
-  double _getPrice(String symbol) {
-    final prices = {'ETH': 3200.0, 'SOL': 180.0, 'BTC': 91000.0, 'ADA': 0.45, 'DOT': 7.5};
-    return prices[symbol] ?? 1.0;
-  }
-}
-
-// Data Models
-class StakeProduct {
-  final String symbol;
-  final String name;
-  final double apy;
-  final double minStake;
-  final double totalStaked;
-  final int validators;
-  final int lockPeriod;
-  final bool isLiquid;
-
-  StakeProduct({
-    required this.symbol,
-    required this.name,
-    required this.apy,
-    required this.minStake,
-    required this.totalStaked,
-    required this.validators,
-    required this.lockPeriod,
-    required this.isLiquid,
-  });
-}
-
-class StakedPosition {
-  final String symbol;
-  final double amount;
-  final double apy;
-  final DateTime startDate;
-  final double rewards;
-
-  StakedPosition({
-    required this.symbol,
-    required this.amount,
-    required this.apy,
-    required this.startDate,
-    required this.rewards,
-  });
 }
 
 // Helper Widgets
@@ -851,7 +892,7 @@ class _SortChip extends StatelessWidget {
 }
 
 class _StakeProductCard extends StatelessWidget {
-  final StakeProduct product;
+  final StakingProduct product;
   final VoidCallback onStake;
 
   const _StakeProductCard({required this.product, required this.onStake});
@@ -870,7 +911,7 @@ class _StakeProductCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              CryptoIcon(symbol: product.symbol, size: 44),
+              CryptoIcon(symbol: product.token, size: 44),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
@@ -878,7 +919,7 @@ class _StakeProductCard extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        Text(product.symbol, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
+                        Text(product.token, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
                         const SizedBox(width: 8),
                         if (product.isLiquid)
                           Container(
@@ -907,10 +948,10 @@ class _StakeProductCard extends StatelessWidget {
           const SizedBox(height: 16),
           Row(
             children: [
-              _StatItem(label: 'TVL', value: '\$${(product.totalStaked / 1000000).toStringAsFixed(1)}M'),
+              _StatItem(label: 'TVL', value: '\$${(product.availablePool / 1000000).toStringAsFixed(1)}M'),
               _StatItem(label: 'Validators', value: '${product.validators}'),
-              _StatItem(label: 'Min Stake', value: '${product.minStake}'),
-              _StatItem(label: 'Lock', value: product.lockPeriod == 0 ? 'None' : '${product.lockPeriod}d'),
+              _StatItem(label: 'Min Stake', value: '${product.minDeposit}'),
+              _StatItem(label: 'Lock', value: product.lockPeriodDays == 0 ? 'None' : '${product.lockPeriodDays}d'),
             ],
           ),
           const SizedBox(height: 16),
@@ -953,7 +994,7 @@ class _StatItem extends StatelessWidget {
 }
 
 class _MyPositionCard extends StatelessWidget {
-  final StakedPosition position;
+  final StakingPosition position;
   final VoidCallback onUnstake;
   final VoidCallback onClaim;
 
@@ -961,7 +1002,7 @@ class _MyPositionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final days = DateTime.now().difference(position.startDate).inDays;
+    final days = DateTime.now().difference(position.depositedAt).inDays;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -976,13 +1017,13 @@ class _MyPositionCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              CryptoIcon(symbol: position.symbol, size: 40),
+              CryptoIcon(symbol: position.token, size: 40),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(position.symbol, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
+                    Text(position.token, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
                     Text('Staked $days days ago', style: TextStyle(color: Colors.grey[500], fontSize: 11)),
                   ],
                 ),
@@ -1006,7 +1047,7 @@ class _MyPositionCard extends StatelessWidget {
                 children: [
                   Text('Staked Amount', style: TextStyle(color: Colors.grey[500], fontSize: 11)),
                   const SizedBox(height: 4),
-                  Text('${position.amount} ${position.symbol}', style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
+                  Text('${position.amount} ${position.token}', style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
                 ],
               ),
               Column(
@@ -1014,7 +1055,7 @@ class _MyPositionCard extends StatelessWidget {
                 children: [
                   Text('Rewards Earned', style: TextStyle(color: Colors.grey[500], fontSize: 11)),
                   const SizedBox(height: 4),
-                  Text('+${position.rewards.toStringAsFixed(6)} ${position.symbol}', style: TextStyle(color: AppColors.success, fontSize: 16, fontWeight: FontWeight.w600)),
+                  Text('+${position.accruedInterest.toStringAsFixed(6)} ${position.token}', style: TextStyle(color: AppColors.success, fontSize: 16, fontWeight: FontWeight.w600)),
                 ],
               ),
             ],

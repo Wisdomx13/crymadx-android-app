@@ -11,6 +11,7 @@ import '../../navigation/app_router.dart';
 import '../../services/crypto_service.dart';
 import '../../services/websocket_service.dart';
 import '../../services/nft_service.dart';
+import '../../services/notification_service.dart';
 
 /// Home Screen - Bybit-inspired sleek design with LIVE WebSocket prices
 class HomeScreen extends StatefulWidget {
@@ -32,6 +33,8 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _balanceVisible = true;
   final GlobalKey _notificationKey = GlobalKey();
   OverlayEntry? _notificationOverlay;
+  List<AppNotification> _notifications = [];
+  int _unreadCount = 0;
   final TextEditingController _searchController = TextEditingController();
   bool _showSearchResults = false;
   int _currentEventIndex = 0;
@@ -681,6 +684,21 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Future<void> _loadNotifications() async {
+    try {
+      final notifications = await notificationService.fetchNotifications(limit: 5);
+      final count = await notificationService.getUnreadCount();
+      if (mounted) {
+        setState(() {
+          _notifications = notifications;
+          _unreadCount = count;
+        });
+      }
+    } catch (e) {
+      // Silently fail - notifications are not critical
+    }
+  }
+
   void _showNotifications(BuildContext context) {
     if (_notificationOverlay != null) { _removeNotificationOverlay(); return; }
     final RenderBox? renderBox = _notificationKey.currentContext?.findRenderObject() as RenderBox?;
@@ -691,6 +709,11 @@ class _HomeScreenState extends State<HomeScreen> {
     final bgColor = isDark ? const Color(0xFF1A1A1A) : Colors.white;
     final textColor = isDark ? Colors.white : const Color(0xFF000000);
     final borderColor = isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.1);
+
+    // Load notifications if not loaded
+    if (_notifications.isEmpty) {
+      _loadNotifications();
+    }
 
     _notificationOverlay = OverlayEntry(
       builder: (ctx) => Stack(
@@ -713,19 +736,38 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Padding(padding: const EdgeInsets.all(14), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text('Notifications', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: textColor)), Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.15), borderRadius: BorderRadius.circular(10)), child: Text('3', style: TextStyle(color: AppColors.primary, fontSize: 11, fontWeight: FontWeight.w600)))])),
+                    Padding(padding: const EdgeInsets.all(14), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text('Notifications', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: textColor)), if (_unreadCount > 0) Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.15), borderRadius: BorderRadius.circular(10)), child: Text('$_unreadCount', style: TextStyle(color: AppColors.primary, fontSize: 11, fontWeight: FontWeight.w600)))])),
                     Divider(color: borderColor, height: 1),
                     Flexible(
                       child: SingleChildScrollView(
                         padding: const EdgeInsets.all(8),
-                        child: Column(
-                          children: [
-                            _NotificationItem(icon: Icons.trending_up, title: 'BTC Price Alert', message: 'Bitcoin reached \$${_topCryptos.isNotEmpty ? _topCryptos.first.price.toStringAsFixed(0) : "88,000"}', time: '2m', color: AppColors.tradingBuy, isUnread: true, onTap: () { _removeNotificationOverlay(); context.go('${AppRoutes.trade}?symbol=BTCUSDT&base=BTC'); }),
-                            _NotificationItem(icon: Icons.check_circle, title: 'Deposit Confirmed', message: 'Your deposit of \$500 has been credited', time: '1h', color: AppColors.success, isUnread: true, onTap: () { _removeNotificationOverlay(); context.push(AppRoutes.deposit); }),
-                            _NotificationItem(icon: Icons.card_giftcard, title: 'Welcome Bonus', message: 'Claim your 10 USDT welcome bonus', time: '1d', color: AppColors.warning, isUnread: false, onTap: _removeNotificationOverlay),
-                            _NotificationItem(icon: Icons.security, title: 'Security Alert', message: 'New login from Chrome on Windows', time: '3h', color: Colors.orange, isUnread: false, onTap: _removeNotificationOverlay),
-                          ],
-                        ),
+                        child: _notifications.isEmpty
+                            ? Padding(
+                                padding: const EdgeInsets.all(20),
+                                child: Column(
+                                  children: [
+                                    Icon(Icons.notifications_none, color: Colors.grey[600], size: 40),
+                                    const SizedBox(height: 8),
+                                    Text('No notifications', style: TextStyle(color: Colors.grey[500], fontSize: 13)),
+                                  ],
+                                ),
+                              )
+                            : Column(
+                                children: _notifications.map((n) => _NotificationItem(
+                                  icon: _getNotificationIcon(n.type),
+                                  title: n.title,
+                                  message: n.message,
+                                  time: _formatTime(n.createdAt),
+                                  color: _getNotificationColor(n.type),
+                                  isUnread: !n.isRead,
+                                  onTap: () {
+                                    _removeNotificationOverlay();
+                                    if (n.data != null && n.data!['route'] != null) {
+                                      context.push(n.data!['route']);
+                                    }
+                                  },
+                                )).toList(),
+                              ),
                       ),
                     ),
                     // See All Button
@@ -754,6 +796,40 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
     Overlay.of(context).insert(_notificationOverlay!);
+  }
+
+  IconData _getNotificationIcon(String type) {
+    switch (type.toLowerCase()) {
+      case 'deposit': return Icons.south_west;
+      case 'withdrawal': return Icons.north_east;
+      case 'trade': return Icons.swap_horiz;
+      case 'price_alert': return Icons.trending_up;
+      case 'security': return Icons.security;
+      case 'kyc': return Icons.verified_user;
+      case 'reward': return Icons.card_giftcard;
+      default: return Icons.notifications;
+    }
+  }
+
+  Color _getNotificationColor(String type) {
+    switch (type.toLowerCase()) {
+      case 'deposit': return AppColors.success;
+      case 'withdrawal': return AppColors.warning;
+      case 'trade': return AppColors.info;
+      case 'price_alert': return AppColors.tradingBuy;
+      case 'security': return Colors.orange;
+      case 'kyc': return AppColors.primary;
+      case 'reward': return AppColors.warning;
+      default: return AppColors.primary;
+    }
+  }
+
+  String _formatTime(DateTime time) {
+    final diff = DateTime.now().difference(time);
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m';
+    if (diff.inHours < 24) return '${diff.inHours}h';
+    if (diff.inDays < 7) return '${diff.inDays}d';
+    return '${(diff.inDays / 7).floor()}w';
   }
 
   void _showMoreOptions(BuildContext context) {
