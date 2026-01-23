@@ -29,6 +29,7 @@ class _AssetsScreenState extends State<AssetsScreen> {
   bool _hideBalance = false;
   List<dynamic> _recentTransactions = [];
   bool _loadingTransactions = false;
+  String _selectedAccountType = 'funding'; // 'funding' or 'trading'
 
   @override
   void initState() {
@@ -180,6 +181,13 @@ class _AssetsScreenState extends State<AssetsScreen> {
                       ),
                       Expanded(
                         child: _buildActionButton(
+                          icon: Icons.swap_horiz_rounded,
+                          label: 'Transfer',
+                          onTap: () => context.push(AppRoutes.transfer),
+                        ),
+                      ),
+                      Expanded(
+                        child: _buildActionButton(
                           icon: Icons.refresh_rounded,
                           label: 'Convert',
                           onTap: () => context.push(AppRoutes.convert),
@@ -187,6 +195,37 @@ class _AssetsScreenState extends State<AssetsScreen> {
                       ),
                     ],
                   ),
+                ),
+
+                const SizedBox(height: 20),
+
+                // Funding / Trading Account Tabs
+                Consumer<CurrencyProvider>(
+                  builder: (context, currency, _) {
+                    return Row(
+                      children: [
+                        Expanded(
+                          child: _buildAccountTab(
+                            title: 'Funding Account',
+                            balance: balanceProvider.fundingBalance,
+                            isSelected: _selectedAccountType == 'funding',
+                            onTap: () => setState(() => _selectedAccountType = 'funding'),
+                            currency: currency,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _buildAccountTab(
+                            title: 'Trading Account',
+                            balance: balanceProvider.tradingBalance,
+                            isSelected: _selectedAccountType == 'trading',
+                            onTap: () => setState(() => _selectedAccountType = 'trading'),
+                            currency: currency,
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
 
                 const SizedBox(height: 24),
@@ -199,11 +238,16 @@ class _AssetsScreenState extends State<AssetsScreen> {
 
                 const SizedBox(height: 16),
 
-                // Asset List - All assets combined
-                ...balanceProvider.allAssets.map((asset) => _buildAssetCardFromProvider(asset)),
+                // Asset List - Based on selected account type
+                ...(_selectedAccountType == 'funding'
+                    ? balanceProvider.fundingAssets
+                    : balanceProvider.tradingAssets
+                ).map((asset) => _buildAssetCardFromProvider(asset)),
 
                 // Show empty state if no assets
-                if (balanceProvider.allAssets.isEmpty)
+                if ((_selectedAccountType == 'funding'
+                    ? balanceProvider.fundingAssets
+                    : balanceProvider.tradingAssets).isEmpty)
                   Container(
                     padding: const EdgeInsets.all(32),
                     child: Column(
@@ -349,6 +393,75 @@ class _AssetsScreenState extends State<AssetsScreen> {
     );
   }
 
+  Widget _buildAccountTab({
+    required String title,
+    required double balance,
+    required bool isSelected,
+    required VoidCallback onTap,
+    required CurrencyProvider currency,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? (isDark ? const Color(0xFF1A1A1A) : Colors.white)
+              : (isDark ? const Color(0xFF121212) : const Color(0xFFF5F5F5)),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? AppColors.primary : Colors.transparent,
+            width: 1.5,
+          ),
+          boxShadow: isSelected && !isDark
+              ? [
+                  BoxShadow(
+                    color: AppColors.primary.withOpacity(0.1),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  title.contains('Funding') ? Icons.account_balance_wallet_outlined : Icons.candlestick_chart_outlined,
+                  color: isSelected ? AppColors.primary : (isDark ? Colors.grey[500] : Colors.grey[600]),
+                  size: 18,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: isSelected
+                        ? (isDark ? Colors.white : Colors.black)
+                        : (isDark ? Colors.grey[500] : Colors.grey[600]),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _hideBalance ? '****' : currency.formatAmount(balance),
+              style: TextStyle(
+                color: isDark ? Colors.white : Colors.black,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildAssetCardFromProvider(AssetBalance asset) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return GestureDetector(
@@ -360,7 +473,7 @@ class _AssetsScreenState extends State<AssetsScreen> {
             'name': asset.name,
             'amount': asset.amount,
             'valueUsd': asset.valueUsd,
-            'accountType': 'all',
+            'accountType': _selectedAccountType,
           },
         );
       },
