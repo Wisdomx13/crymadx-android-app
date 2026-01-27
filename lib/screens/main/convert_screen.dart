@@ -140,6 +140,15 @@ class _ConvertScreenState extends State<ConvertScreen> {
     final rate = _fromPrice / _toPrice;
     final estimatedAmount = fromAmount * rate;
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final modalBgColor = isDark ? const Color(0xFF121212) : Colors.white;
+    final cardBgColor = isDark ? const Color(0xFF1A1A1A) : const Color(0xFFF5F5F5);
+    final detailBgColor = isDark ? const Color(0xFF0D0D0D) : const Color(0xFFEEEEEE);
+    final textColor = isDark ? Colors.white : Colors.black;
+    final subtextColor = isDark ? Colors.grey[500] : Colors.grey[700];
+    final dividerColor = isDark ? Colors.grey[850] : Colors.grey[300];
+    final handleColor = isDark ? Colors.grey[700] : Colors.grey[400];
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -148,9 +157,9 @@ class _ConvertScreenState extends State<ConvertScreen> {
         child: Padding(
           padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
           child: Container(
-            decoration: const BoxDecoration(
-              color: Color(0xFF121212),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            decoration: BoxDecoration(
+              color: modalBgColor,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
             ),
             padding: const EdgeInsets.all(20),
             child: Column(
@@ -164,17 +173,17 @@ class _ConvertScreenState extends State<ConvertScreen> {
                     height: 4,
                     margin: const EdgeInsets.only(bottom: 20),
                     decoration: BoxDecoration(
-                      color: Colors.grey[700],
+                      color: handleColor,
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
                 ),
 
                 // Title
-                const Text(
+                Text(
                   'Confirm Conversion',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: textColor,
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
                   ),
@@ -186,7 +195,7 @@ class _ConvertScreenState extends State<ConvertScreen> {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1A1A1A),
+                    color: cardBgColor,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
@@ -197,11 +206,11 @@ class _ConvertScreenState extends State<ConvertScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('From', style: TextStyle(color: Colors.grey[500], fontSize: 12)),
+                            Text('From', style: TextStyle(color: subtextColor, fontSize: 12)),
                             const SizedBox(height: 4),
                             Text(
                               '$fromAmount $_fromCrypto',
-                              style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600),
+                              style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w600),
                             ),
                           ],
                         ),
@@ -216,8 +225,8 @@ class _ConvertScreenState extends State<ConvertScreen> {
                 Center(
                   child: Container(
                     padding: const EdgeInsets.all(8),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFF1A1A1A),
+                    decoration: BoxDecoration(
+                      color: cardBgColor,
                       shape: BoxShape.circle,
                     ),
                     child: Icon(Icons.arrow_downward, color: AppColors.tradingBuy, size: 20),
@@ -230,7 +239,7 @@ class _ConvertScreenState extends State<ConvertScreen> {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1A1A1A),
+                    color: cardBgColor,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
@@ -241,7 +250,7 @@ class _ConvertScreenState extends State<ConvertScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('To (estimated)', style: TextStyle(color: Colors.grey[500], fontSize: 12)),
+                            Text('To (estimated)', style: TextStyle(color: subtextColor, fontSize: 12)),
                             const SizedBox(height: 4),
                             Text(
                               '${estimatedAmount.toStringAsFixed(8)} $_toCrypto',
@@ -260,20 +269,20 @@ class _ConvertScreenState extends State<ConvertScreen> {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF0D0D0D),
+                    color: detailBgColor,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Column(
                     children: [
-                      _buildQuoteDetailRow('Exchange Rate', '1 $_fromCrypto = ${rate.toStringAsFixed(8)} $_toCrypto'),
+                      _buildQuoteDetailRow('Exchange Rate', '1 $_fromCrypto = ${rate.toStringAsFixed(8)} $_toCrypto', isDark),
                       const SizedBox(height: 12),
-                      Divider(color: Colors.grey[850], height: 1),
+                      Divider(color: dividerColor, height: 1),
                       const SizedBox(height: 12),
-                      _buildQuoteDetailRow('Fee', '0 USDT'),
+                      _buildQuoteDetailRow('Fee', '0 USDT', isDark),
                       const SizedBox(height: 12),
-                      Divider(color: Colors.grey[850], height: 1),
+                      Divider(color: dividerColor, height: 1),
                       const SizedBox(height: 12),
-                      _buildQuoteDetailRow('Slippage Tolerance', '0.5%'),
+                      _buildQuoteDetailRow('Slippage Tolerance', '0.5%', isDark),
                     ],
                   ),
                 ),
@@ -284,11 +293,11 @@ class _ConvertScreenState extends State<ConvertScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.access_time, color: Colors.grey[500], size: 14),
+                    Icon(Icons.access_time, color: subtextColor, size: 14),
                     const SizedBox(width: 4),
                     Text(
                       'Quote valid for 10 seconds',
-                      style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                      style: TextStyle(color: subtextColor, fontSize: 12),
                     ),
                   ],
                 ),
@@ -304,10 +313,10 @@ class _ConvertScreenState extends State<ConvertScreen> {
                         child: OutlinedButton(
                           onPressed: () => Navigator.pop(context),
                           style: OutlinedButton.styleFrom(
-                            side: BorderSide(color: Colors.grey[700]!),
+                            side: BorderSide(color: isDark ? Colors.grey[700]! : Colors.grey[400]!),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                           ),
-                          child: Text('Cancel', style: TextStyle(color: Colors.grey[400], fontSize: 15)),
+                          child: Text('Cancel', style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700], fontSize: 15)),
                         ),
                       ),
                     ),
@@ -342,12 +351,12 @@ class _ConvertScreenState extends State<ConvertScreen> {
     );
   }
 
-  Widget _buildQuoteDetailRow(String label, String value) {
+  Widget _buildQuoteDetailRow(String label, String value, bool isDark) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: TextStyle(color: Colors.grey[500], fontSize: 13)),
-        Text(value, style: const TextStyle(color: Colors.white, fontSize: 13)),
+        Text(label, style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[700], fontSize: 13)),
+        Text(value, style: TextStyle(color: isDark ? Colors.white : Colors.black, fontSize: 13)),
       ],
     );
   }
@@ -356,7 +365,7 @@ class _ConvertScreenState extends State<ConvertScreen> {
     setState(() => _isLoading = true);
 
     // Simulate API call - in production, call real swap API
-    await Future.delayed(const Duration(milliseconds: 1500));
+    await Future.delayed(const Duration(milliseconds: 300));
 
     setState(() => _isLoading = false);
 
@@ -371,11 +380,16 @@ class _ConvertScreenState extends State<ConvertScreen> {
         });
       });
 
+      final isDark = Theme.of(context).brightness == Brightness.dark;
+      final dialogBgColor = isDark ? const Color(0xFF1A1A1A) : Colors.white;
+      final textColor = isDark ? Colors.white : Colors.black;
+      final subtextColor = isDark ? Colors.grey[400] : Colors.grey[700];
+
       showDialog(
         context: context,
         barrierDismissible: false,
         builder: (context) => AlertDialog(
-          backgroundColor: const Color(0xFF1A1A1A),
+          backgroundColor: dialogBgColor,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -390,14 +404,14 @@ class _ConvertScreenState extends State<ConvertScreen> {
                 child: Icon(Icons.check_rounded, color: AppColors.tradingBuy, size: 48),
               ),
               const SizedBox(height: 20),
-              const Text(
+              Text(
                 'Conversion Successful!',
-                style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
               Text(
                 'You converted $fromAmount $_fromCrypto to ${toAmount.toStringAsFixed(8)} $_toCrypto',
-                style: TextStyle(color: Colors.grey[400], fontSize: 14),
+                style: TextStyle(color: subtextColor, fontSize: 14),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),
@@ -432,9 +446,16 @@ class _ConvertScreenState extends State<ConvertScreen> {
   }
 
   void _showConversionHistory() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final modalBgColor = isDark ? const Color(0xFF111111) : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black;
+    final subtextColor = isDark ? Colors.grey[600] : Colors.grey[700];
+    final cardBgColor = isDark ? const Color(0xFF0A0A0A) : const Color(0xFFF5F5F5);
+    final borderColor = isDark ? const Color(0xFF1A1A1A) : Colors.grey[300]!;
+
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF111111),
+      backgroundColor: modalBgColor,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -454,10 +475,10 @@ class _ConvertScreenState extends State<ConvertScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Conversion History', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                    Text('Conversion History', style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.bold)),
                     GestureDetector(
                       onTap: () => Navigator.pop(context),
-                      child: const Icon(Icons.close, color: Colors.grey, size: 20),
+                      child: Icon(Icons.close, color: subtextColor, size: 20),
                     ),
                   ],
                 ),
@@ -468,11 +489,11 @@ class _ConvertScreenState extends State<ConvertScreen> {
                       padding: const EdgeInsets.all(24),
                       child: Column(
                         children: [
-                          Icon(Icons.history, color: Colors.grey[700], size: 48),
+                          Icon(Icons.history, color: subtextColor, size: 48),
                           const SizedBox(height: 12),
-                          Text('No conversions yet', style: TextStyle(color: Colors.grey[600])),
+                          Text('No conversions yet', style: TextStyle(color: subtextColor)),
                           const SizedBox(height: 4),
-                          Text('Your conversion history will appear here', style: TextStyle(color: Colors.grey[700], fontSize: 12)),
+                          Text('Your conversion history will appear here', style: TextStyle(color: subtextColor, fontSize: 12)),
                         ],
                       ),
                     ),
@@ -482,9 +503,9 @@ class _ConvertScreenState extends State<ConvertScreen> {
                     margin: const EdgeInsets.only(bottom: 12),
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF0A0A0A),
+                      color: cardBgColor,
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFF1A1A1A)),
+                      border: Border.all(color: borderColor),
                     ),
                     child: Row(
                       children: [
@@ -501,9 +522,9 @@ class _ConvertScreenState extends State<ConvertScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('${item['from']} → ${item['to']}', style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500)),
+                              Text('${item['from']} → ${item['to']}', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w500)),
                               const SizedBox(height: 2),
-                              Text(item['date'], style: TextStyle(color: Colors.grey[600], fontSize: 11)),
+                              Text(item['date'], style: TextStyle(color: subtextColor, fontSize: 11)),
                             ],
                           ),
                         ),
@@ -831,9 +852,14 @@ class _ConvertScreenState extends State<ConvertScreen> {
   }
 
   void _showCryptoSelector(bool isFrom) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final modalBgColor = isDark ? const Color(0xFF1A1A1A) : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black;
+    final subtextColor = isDark ? Colors.grey[500] : Colors.grey[700];
+
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF1A1A1A),
+      backgroundColor: modalBgColor,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
@@ -848,12 +874,12 @@ class _ConvertScreenState extends State<ConvertScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Select ${isFrom ? 'From' : 'To'} Currency', style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
+              Text('Select ${isFrom ? 'From' : 'To'} Currency', style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w600)),
               const SizedBox(height: 16),
               ...(_cryptoOptions.map((crypto) => ListTile(
                 leading: CryptoIcon(symbol: crypto['symbol'], size: 32),
-                title: Text(crypto['symbol'], style: const TextStyle(color: Colors.white)),
-                subtitle: Text(crypto['name'], style: TextStyle(color: Colors.grey[500], fontSize: 12)),
+                title: Text(crypto['symbol'], style: TextStyle(color: textColor)),
+                subtitle: Text(crypto['name'], style: TextStyle(color: subtextColor, fontSize: 12)),
                 onTap: () {
                   Navigator.pop(context);
                   setState(() {

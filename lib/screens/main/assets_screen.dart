@@ -29,7 +29,7 @@ class _AssetsScreenState extends State<AssetsScreen> {
   bool _hideBalance = false;
   List<dynamic> _recentTransactions = [];
   bool _loadingTransactions = false;
-  String _selectedAccountType = 'funding'; // 'funding' or 'trading'
+  int _selectedAccountTab = 0; // 0 = All, 1 = Funding, 2 = Trading
 
   @override
   void initState() {
@@ -39,6 +39,59 @@ class _AssetsScreenState extends State<AssetsScreen> {
       context.read<BalanceProvider>().loadBalances();
     });
     _loadRecentTransactions();
+  }
+
+  /// Get assets based on selected tab
+  List<AssetBalance> _getFilteredAssets(BalanceProvider balanceProvider) {
+    switch (_selectedAccountTab) {
+      case 1: // Funding
+        return balanceProvider.fundingAssets;
+      case 2: // Trading
+        return balanceProvider.tradingAssets;
+      default: // All (Combined)
+        return _getCombinedAssets(balanceProvider);
+    }
+  }
+
+  /// Combine funding and trading assets into a single list
+  List<AssetBalance> _getCombinedAssets(BalanceProvider balanceProvider) {
+    final Map<String, AssetBalance> combined = {};
+
+    // Add funding assets
+    for (final asset in balanceProvider.fundingAssets) {
+      combined[asset.symbol] = asset;
+    }
+
+    // Add/merge trading assets
+    for (final asset in balanceProvider.tradingAssets) {
+      if (combined.containsKey(asset.symbol)) {
+        // Combine amounts
+        final existing = combined[asset.symbol]!;
+        combined[asset.symbol] = AssetBalance(
+          symbol: asset.symbol,
+          name: asset.name,
+          amount: existing.amount + asset.amount,
+          price: asset.price, // Use same price
+          available: existing.available + asset.available,
+        );
+      } else {
+        combined[asset.symbol] = asset;
+      }
+    }
+
+    return combined.values.toList();
+  }
+
+  /// Get balance based on selected tab
+  double _getDisplayBalance(BalanceProvider balanceProvider) {
+    switch (_selectedAccountTab) {
+      case 1: // Funding
+        return balanceProvider.fundingAssets.fold(0.0, (sum, asset) => sum + (asset.amount * asset.price));
+      case 2: // Trading
+        return balanceProvider.tradingAssets.fold(0.0, (sum, asset) => sum + (asset.amount * asset.price));
+      default: // All (Total)
+        return balanceProvider.totalBalance;
+    }
   }
 
   Future<void> _loadRecentTransactions() async {
@@ -86,8 +139,8 @@ class _AssetsScreenState extends State<AssetsScreen> {
 
     return Consumer<BalanceProvider>(
       builder: (context, balanceProvider, _) {
-        // Total balance = funding + trading (same as home page)
-        final totalBalance = balanceProvider.totalBalance;
+        // Get balance based on selected tab
+        final displayBalance = _getDisplayBalance(balanceProvider);
 
         return Scaffold(
       backgroundColor: bgColor,
@@ -138,7 +191,7 @@ class _AssetsScreenState extends State<AssetsScreen> {
                           ),
                           const SizedBox(height: 12),
                           Text(
-                            _hideBalance ? '****' : currency.formatAmount(totalBalance),
+                            _hideBalance ? '****' : currency.formatAmount(displayBalance),
                             style: TextStyle(
                               color: textColor,
                               fontSize: 32,
@@ -147,7 +200,7 @@ class _AssetsScreenState extends State<AssetsScreen> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            _hideBalance ? '≈ **** BTC' : '≈ ${(totalBalance / 91000).toStringAsFixed(4)} BTC',
+                            _hideBalance ? '≈ **** BTC' : '≈ ${(displayBalance / 91000).toStringAsFixed(4)} BTC',
                             style: TextStyle(color: isDark ? Colors.grey[500] : const Color(0xFF333333), fontSize: 14),
                           ),
                         ],
@@ -158,11 +211,11 @@ class _AssetsScreenState extends State<AssetsScreen> {
 
                 const SizedBox(height: 20),
 
-                // Action Buttons Row - Bybit Style (full width spread)
+                // Action Buttons Row - Bybit Style (Deposit, Withdraw, Transfer, Convert)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
                       Expanded(
                         child: _buildActionButton(
@@ -197,40 +250,9 @@ class _AssetsScreenState extends State<AssetsScreen> {
                   ),
                 ),
 
-                const SizedBox(height: 20),
-
-                // Funding / Trading Account Tabs
-                Consumer<CurrencyProvider>(
-                  builder: (context, currency, _) {
-                    return Row(
-                      children: [
-                        Expanded(
-                          child: _buildAccountTab(
-                            title: 'Funding Account',
-                            balance: balanceProvider.fundingBalance,
-                            isSelected: _selectedAccountType == 'funding',
-                            onTap: () => setState(() => _selectedAccountType = 'funding'),
-                            currency: currency,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _buildAccountTab(
-                            title: 'Trading Account',
-                            balance: balanceProvider.tradingBalance,
-                            isSelected: _selectedAccountType == 'trading',
-                            onTap: () => setState(() => _selectedAccountType = 'trading'),
-                            currency: currency,
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-
                 const SizedBox(height: 24),
 
-                // My Assets Header
+                // My Assets Header with Tabs
                 Text(
                   'My Assets',
                   style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700),
@@ -238,16 +260,34 @@ class _AssetsScreenState extends State<AssetsScreen> {
 
                 const SizedBox(height: 16),
 
-                // Asset List - Based on selected account type
-                ...(_selectedAccountType == 'funding'
-                    ? balanceProvider.fundingAssets
-                    : balanceProvider.tradingAssets
-                ).map((asset) => _buildAssetCardFromProvider(asset)),
+                // Account Tabs
+                Container(
+                  decoration: BoxDecoration(
+                    color: cardBgColor,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _buildAccountTab('All', 0, isDark),
+                      ),
+                      Expanded(
+                        child: _buildAccountTab('Funding', 1, isDark),
+                      ),
+                      Expanded(
+                        child: _buildAccountTab('Trading', 2, isDark),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // Asset List - Show filtered assets
+                ..._getFilteredAssets(balanceProvider).map((asset) => _buildAssetCardFromProvider(asset)),
 
                 // Show empty state if no assets
-                if ((_selectedAccountType == 'funding'
-                    ? balanceProvider.fundingAssets
-                    : balanceProvider.tradingAssets).isEmpty)
+                if (_getFilteredAssets(balanceProvider).isEmpty)
                   Container(
                     padding: const EdgeInsets.all(32),
                     child: Column(
@@ -393,70 +433,29 @@ class _AssetsScreenState extends State<AssetsScreen> {
     );
   }
 
-  Widget _buildAccountTab({
-    required String title,
-    required double balance,
-    required bool isSelected,
-    required VoidCallback onTap,
-    required CurrencyProvider currency,
-  }) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+  Widget _buildAccountTab(String label, int index, bool isDark) {
+    final isSelected = _selectedAccountTab == index;
     return GestureDetector(
-      onTap: onTap,
+      onTap: () => setState(() => _selectedAccountTab = index),
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
           color: isSelected
-              ? (isDark ? const Color(0xFF1A1A1A) : Colors.white)
-              : (isDark ? const Color(0xFF121212) : const Color(0xFFF5F5F5)),
+              ? AppColors.primary
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isSelected ? AppColors.primary : Colors.transparent,
-            width: 1.5,
-          ),
-          boxShadow: isSelected && !isDark
-              ? [
-                  BoxShadow(
-                    color: AppColors.primary.withOpacity(0.1),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ]
-              : null,
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  title.contains('Funding') ? Icons.account_balance_wallet_outlined : Icons.candlestick_chart_outlined,
-                  color: isSelected ? AppColors.primary : (isDark ? Colors.grey[500] : Colors.grey[600]),
-                  size: 18,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  title,
-                  style: TextStyle(
-                    color: isSelected
-                        ? (isDark ? Colors.white : Colors.black)
-                        : (isDark ? Colors.grey[500] : Colors.grey[600]),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
+        child: Center(
+          child: Text(
+            label,
+            style: TextStyle(
+              color: isSelected
+                  ? Colors.black
+                  : (isDark ? Colors.grey[400] : const Color(0xFF666666)),
+              fontSize: 14,
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
             ),
-            const SizedBox(height: 8),
-            Text(
-              _hideBalance ? '****' : currency.formatAmount(balance),
-              style: TextStyle(
-                color: isDark ? Colors.white : Colors.black,
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -473,7 +472,6 @@ class _AssetsScreenState extends State<AssetsScreen> {
             'name': asset.name,
             'amount': asset.amount,
             'valueUsd': asset.valueUsd,
-            'accountType': _selectedAccountType,
           },
         );
       },

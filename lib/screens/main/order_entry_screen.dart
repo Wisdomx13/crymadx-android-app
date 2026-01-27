@@ -326,17 +326,15 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> with SingleTickerPr
             constraints: const BoxConstraints(),
           ),
           const SizedBox(width: 12),
-          GestureDetector(
-            onTap: () {}, // Could open pair selector
-            child: Row(
-              children: [
-                Text(
-                  '${widget.baseAsset}/${widget.quoteAsset}',
-                  style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w600),
-                ),
-                Icon(Icons.keyboard_arrow_down, color: textColor, size: 20),
-              ],
-            ),
+          Row(
+            children: [
+              CryptoIcon(symbol: widget.baseAsset, size: 24),
+              const SizedBox(width: 8),
+              Text(
+                '${widget.baseAsset}/${widget.quoteAsset}',
+                style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+            ],
           ),
           const SizedBox(width: 8),
           Text(

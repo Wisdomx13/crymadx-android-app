@@ -623,7 +623,7 @@ class _StakeScreenState extends State<StakeScreen> with SingleTickerProviderStat
                           child: ElevatedButton(
                             onPressed: isProcessing ? null : () async {
                               setModalState(() => isProcessing = true);
-                              await Future.delayed(const Duration(seconds: 2));
+                              await Future.delayed(const Duration(milliseconds: 300));
                               setModalState(() {
                                 isProcessing = false;
                                 step = 3;

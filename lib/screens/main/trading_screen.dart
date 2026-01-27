@@ -33,9 +33,9 @@ class _TradingScreenState extends State<TradingScreen> with TickerProviderStateM
   int _topTabIndex = 1; // Spot selected
   final List<String> _topTabs = ['Convert', 'Spot'];
 
-  // Sub tabs
-  int _subTabIndex = 0; // Chart
-  final List<String> _subTabs = ['Chart', 'Overview', 'Data', 'Feed'];
+  // Sub tabs - removed Overview/Data/Feed as they were placeholder
+  int _subTabIndex = 0; // Chart only
+  final List<String> _subTabs = ['Chart'];
 
   // Order book tabs
   int _orderBookTabIndex = 0; // Order Book
@@ -419,6 +419,8 @@ class _TradingScreenState extends State<TradingScreen> with TickerProviderStateM
 
     return Scaffold(
       backgroundColor: bgColor,
+      // Sticky trade buttons at absolute bottom (only for Spot view)
+      bottomSheet: _topTabIndex == 1 && !_isLoading ? _buildStickyTradeButtons() : null,
       body: SafeArea(
         child: _isLoading
             ? _buildLoadingState()
@@ -497,6 +499,9 @@ class _TradingScreenState extends State<TradingScreen> with TickerProviderStateM
 
   // SPOT TRADING VIEW (extracted for animation)
   Widget _buildSpotView(Color priceColor, bool isPositive, bool priceDirection) {
+    // Bottom padding to account for sticky buttons (bottomSheet) + bottom nav bar
+    final bottomPadding = 65 + MediaQuery.of(context).padding.bottom + 70;
+
     return Column(
       key: const ValueKey('spot'),
       children: [
@@ -513,17 +518,27 @@ class _TradingScreenState extends State<TradingScreen> with TickerProviderStateM
                   if (_showAnnouncement) _buildAnnouncement(),
                   _buildTimeframeSelector(),
                   _buildMAIndicators(),
-                  SizedBox(height: 200, child: _buildCandlestickChart()),
+                  // Chart container with subtle border
+                  Container(
+                    margin: const EdgeInsets.symmetric(vertical: 4),
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0A0A0A),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFF1A1A1A), width: 1),
+                    ),
+                    child: SizedBox(height: 200, child: _buildCandlestickChart()),
+                  ),
                   _buildVolumeSection(),
                   const SizedBox(height: 8),
                   _buildOrderBookSection(),
-                  const SizedBox(height: 16),
+                  // Extra padding at bottom to prevent content being hidden behind sticky buttons
+                  SizedBox(height: bottomPadding),
                 ],
               ),
             ),
           ),
         ),
-        _buildStickyTradeButtons(),
       ],
     );
   }
@@ -601,26 +616,22 @@ class _TradingScreenState extends State<TradingScreen> with TickerProviderStateM
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(
         children: [
-          GestureDetector(
-            onTap: _showPairSelector,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: elementBg,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CryptoIcon(symbol: _baseAsset, size: 20),
-                  const SizedBox(width: 6),
-                  Text(
-                    '$_baseAsset/$_quoteAsset',
-                    style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.bold),
-                  ),
-                  Icon(Icons.keyboard_arrow_down, color: textColor, size: 16),
-                ],
-              ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: elementBg,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CryptoIcon(symbol: _baseAsset, size: 20),
+                const SizedBox(width: 6),
+                Text(
+                  '$_baseAsset/$_quoteAsset',
+                  style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.bold),
+                ),
+              ],
             ),
           ),
           const SizedBox(width: 6),
@@ -1172,75 +1183,104 @@ class _TradingScreenState extends State<TradingScreen> with TickerProviderStateM
     final bgColor = isDark ? const Color(0xFF0D0D0D) : Colors.white;
     final borderColor = isDark ? const Color(0xFF1A1A1A) : Colors.grey[300]!;
     final elementBg = isDark ? const Color(0xFF1A1A1A) : const Color(0xFFF0F0F0);
-    final elementBgActive = isDark ? const Color(0xFF2A2A2A) : const Color(0xFFE8E8E8);
+
+    // Vibrant colors
+    const vibrantGreen = Color(0xFF00E676);
+    const vibrantRed = Color(0xFFFF1744);
+
+    // Bottom padding: just safe area + small padding (bottomSheet handles positioning)
+    final bottomPadding = MediaQuery.of(context).padding.bottom + 8;
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: EdgeInsets.only(left: 12, right: 12, top: 8, bottom: bottomPadding),
       decoration: BoxDecoration(
         color: bgColor,
         border: Border(top: BorderSide(color: borderColor, width: 1)),
       ),
       child: Row(
         children: [
-          // Line chart icon - switches to line chart
+          // Line chart toggle
           GestureDetector(
             onTap: () => setState(() => _showLineChart = true),
             child: Container(
-              width: 36,
-              height: 36,
-              margin: const EdgeInsets.only(right: 8),
+              width: 32,
+              height: 32,
+              margin: const EdgeInsets.only(right: 6),
               decoration: BoxDecoration(
-                color: _showLineChart ? elementBgActive : elementBg,
-                borderRadius: BorderRadius.circular(8),
-                border: _showLineChart ? Border.all(color: AppColors.tradingBuy, width: 1) : null,
+                color: _showLineChart ? vibrantGreen.withOpacity(0.15) : elementBg,
+                borderRadius: BorderRadius.circular(6),
+                border: _showLineChart ? Border.all(color: vibrantGreen, width: 1) : null,
               ),
-              child: Icon(Icons.show_chart, color: _showLineChart ? AppColors.tradingBuy : (isDark ? Colors.grey[500] : Colors.grey[700]), size: 18),
+              child: Icon(Icons.show_chart, color: _showLineChart ? vibrantGreen : Colors.grey[500], size: 16),
             ),
           ),
-          // Candlestick chart icon - switches to candlestick (default)
+          // Candlestick chart toggle
           GestureDetector(
             onTap: () => setState(() => _showLineChart = false),
             child: Container(
-              width: 36,
-              height: 36,
-              margin: const EdgeInsets.only(right: 12),
+              width: 32,
+              height: 32,
+              margin: const EdgeInsets.only(right: 10),
               decoration: BoxDecoration(
-                color: !_showLineChart ? elementBgActive : elementBg,
-                borderRadius: BorderRadius.circular(8),
-                border: !_showLineChart ? Border.all(color: AppColors.tradingBuy, width: 1) : null,
+                color: !_showLineChart ? vibrantGreen.withOpacity(0.15) : elementBg,
+                borderRadius: BorderRadius.circular(6),
+                border: !_showLineChart ? Border.all(color: vibrantGreen, width: 1) : null,
               ),
-              child: Icon(Icons.candlestick_chart, color: !_showLineChart ? AppColors.tradingBuy : (isDark ? Colors.grey[500] : Colors.grey[700]), size: 18),
+              child: Icon(Icons.candlestick_chart, color: !_showLineChart ? vibrantGreen : Colors.grey[500], size: 16),
             ),
           ),
-          // Buy button
+          // Buy button - small, vibrant green with glow
           Expanded(
             child: GestureDetector(
               onTap: () => _showTradeSheet(true),
               child: Container(
-                height: 38,
+                height: 36,
                 margin: const EdgeInsets.only(right: 4),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF00C853),
-                  borderRadius: BorderRadius.circular(20),
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF00E676), Color(0xFF00C853)],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                  ),
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: [
+                    BoxShadow(
+                      color: vibrantGreen.withOpacity(0.4),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
                 child: const Center(
-                  child: Text('Buy', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14)),
+                  child: Text('Buy', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14)),
                 ),
               ),
             ),
           ),
-          // Sell button
+          // Sell button - small, vibrant red with glow
           Expanded(
             child: GestureDetector(
               onTap: () => _showTradeSheet(false),
               child: Container(
-                height: 38,
+                height: 36,
                 margin: const EdgeInsets.only(left: 4),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFF5252),
-                  borderRadius: BorderRadius.circular(20),
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFFF1744), Color(0xFFD50000)],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                  ),
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: [
+                    BoxShadow(
+                      color: vibrantRed.withOpacity(0.4),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
                 child: const Center(
-                  child: Text('Sell', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14)),
+                  child: Text('Sell', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14)),
                 ),
               ),
             ),
@@ -1834,7 +1874,7 @@ class _TradingScreenState extends State<TradingScreen> with TickerProviderStateM
     }
 
     setState(() => _isConverting = true);
-    await Future.delayed(const Duration(seconds: 1));
+    await Future.delayed(const Duration(milliseconds: 200));
     setState(() => _isConverting = false);
 
     if (mounted) {
@@ -2116,7 +2156,7 @@ class _TradingScreenState extends State<TradingScreen> with TickerProviderStateM
     setState(() => _isConverting = true);
 
     // Simulate conversion processing
-    await Future.delayed(const Duration(milliseconds: 1500));
+    await Future.delayed(const Duration(milliseconds: 300));
 
     setState(() => _isConverting = false);
 

@@ -651,7 +651,7 @@ class _FiatScreenState extends State<FiatScreen> {
                                           setModalState(() => currentStep++);
                                         } else {
                                           setModalState(() => isProcessing = true);
-                                          Future.delayed(const Duration(seconds: 3), () {
+                                          Future.delayed(const Duration(milliseconds: 400), () {
                                             setModalState(() {
                                               isProcessing = false;
                                               isComplete = true;

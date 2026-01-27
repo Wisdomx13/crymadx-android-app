@@ -132,6 +132,7 @@ class _P2PScreenState extends State<P2PScreen> {
     return Scaffold(
       backgroundColor: bgColor,
       body: SafeArea(
+        bottom: false, // Bottom handled by _buildBottomTabs SafeArea
         child: Column(
           children: [
             _buildTopNavigation(),
@@ -494,6 +495,7 @@ class _P2PScreenState extends State<P2PScreen> {
 
   Widget _buildBuySellToggle() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final inactiveColor = isDark ? Colors.grey[500] : Colors.grey[600];
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -513,7 +515,7 @@ class _P2PScreenState extends State<P2PScreen> {
               child: Text(
                 'Buy',
                 style: TextStyle(
-                  color: _isBuy ? (isDark ? Colors.black : Colors.white) : Colors.grey[500],
+                  color: _isBuy ? (isDark ? Colors.black : Colors.white) : inactiveColor,
                   fontWeight: FontWeight.w600,
                   fontSize: 14,
                 ),
@@ -535,7 +537,7 @@ class _P2PScreenState extends State<P2PScreen> {
               child: Text(
                 'Sell',
                 style: TextStyle(
-                  color: !_isBuy ? (isDark ? Colors.black : Colors.white) : Colors.grey[500],
+                  color: !_isBuy ? (isDark ? Colors.black : Colors.white) : inactiveColor,
                   fontWeight: FontWeight.w600,
                   fontSize: 14,
                 ),
@@ -546,10 +548,10 @@ class _P2PScreenState extends State<P2PScreen> {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: const Color(0xFF1A3A2A),
+              color: isDark ? const Color(0xFF1A3A2A) : const Color(0xFFE8F5E9),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(Icons.layers, color: Colors.teal, size: 20),
+            child: Icon(Icons.layers, color: isDark ? Colors.teal : Colors.teal[700], size: 20),
           ),
         ],
       ),
@@ -557,6 +559,11 @@ class _P2PScreenState extends State<P2PScreen> {
   }
 
   Widget _buildFilterBar() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final borderColor = isDark ? Colors.grey[800]! : Colors.grey[300]!;
+    final textColor = isDark ? Colors.white : Colors.black;
+    final subtextColor = isDark ? Colors.grey[500] : Colors.grey[600];
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(
@@ -571,7 +578,7 @@ class _P2PScreenState extends State<P2PScreen> {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey[800]!),
+                  border: Border.all(color: borderColor),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Row(
@@ -579,8 +586,8 @@ class _P2PScreenState extends State<P2PScreen> {
                   children: [
                     CryptoIcon(symbol: _selectedCrypto, size: 16),
                     const SizedBox(width: 6),
-                    Text(_selectedCrypto, style: const TextStyle(color: Colors.white, fontSize: 13)),
-                    Icon(Icons.arrow_drop_down, color: Colors.grey[500], size: 18),
+                    Text(_selectedCrypto, style: TextStyle(color: textColor, fontSize: 13)),
+                    Icon(Icons.arrow_drop_down, color: subtextColor, size: 18),
                   ],
                 ),
               ),
@@ -592,14 +599,14 @@ class _P2PScreenState extends State<P2PScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey[800]!),
+                border: Border.all(color: borderColor),
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text('Amount', style: TextStyle(color: Colors.grey[500], fontSize: 13)),
-                  Icon(Icons.arrow_drop_down, color: Colors.grey[500], size: 18),
+                  Text('Amount', style: TextStyle(color: subtextColor, fontSize: 13)),
+                  Icon(Icons.arrow_drop_down, color: subtextColor, size: 18),
                 ],
               ),
             ),
@@ -614,7 +621,7 @@ class _P2PScreenState extends State<P2PScreen> {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey[800]!),
+                  border: Border.all(color: borderColor),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Row(
@@ -622,11 +629,11 @@ class _P2PScreenState extends State<P2PScreen> {
                     Expanded(
                       child: Text(
                         _selectedPayment,
-                        style: TextStyle(color: Colors.grey[500], fontSize: 13),
+                        style: TextStyle(color: subtextColor, fontSize: 13),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    Icon(Icons.arrow_drop_down, color: Colors.grey[500], size: 18),
+                    Icon(Icons.arrow_drop_down, color: subtextColor, size: 18),
                   ],
                 ),
               ),
@@ -638,10 +645,10 @@ class _P2PScreenState extends State<P2PScreen> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey[800]!),
+                  border: Border.all(color: borderColor),
                   borderRadius: BorderRadius.circular(4),
                 ),
-                child: Icon(Icons.filter_list, color: Colors.grey[500], size: 18),
+                child: Icon(Icons.filter_list, color: subtextColor, size: 18),
               ),
               Positioned(
                 right: 0,
@@ -663,48 +670,56 @@ class _P2PScreenState extends State<P2PScreen> {
   }
 
   Widget _buildBottomTabs() {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.black,
-        border: Border(top: BorderSide(color: Colors.grey[900]!)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _BottomTab(
-            icon: Icons.swap_horiz,
-            label: 'P2P',
-            isSelected: _bottomTabIndex == 0,
-            onTap: () => setState(() => _bottomTabIndex = 0),
-          ),
-          _BottomTab(
-            icon: Icons.receipt_long,
-            label: 'Orders',
-            isSelected: _bottomTabIndex == 1,
-            onTap: () => setState(() => _bottomTabIndex = 1),
-          ),
-          _BottomTab(
-            icon: Icons.campaign,
-            label: 'Ads',
-            isSelected: _bottomTabIndex == 2,
-            onTap: () => setState(() => _bottomTabIndex = 2),
-          ),
-          _BottomTab(
-            icon: Icons.person_outline,
-            label: 'Profile',
-            isSelected: _bottomTabIndex == 3,
-            onTap: () => setState(() => _bottomTabIndex = 3),
-          ),
-        ],
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: isDark ? Colors.black : Colors.white,
+          border: Border(top: BorderSide(color: isDark ? Colors.grey[900]! : Colors.grey[300]!)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            _BottomTab(
+              icon: Icons.swap_horiz,
+              label: 'P2P',
+              isSelected: _bottomTabIndex == 0,
+              onTap: () => setState(() => _bottomTabIndex = 0),
+            ),
+            _BottomTab(
+              icon: Icons.receipt_long,
+              label: 'Orders',
+              isSelected: _bottomTabIndex == 1,
+              onTap: () => setState(() => _bottomTabIndex = 1),
+            ),
+            _BottomTab(
+              icon: Icons.campaign,
+              label: 'Ads',
+              isSelected: _bottomTabIndex == 2,
+              onTap: () => setState(() => _bottomTabIndex = 2),
+            ),
+            _BottomTab(
+              icon: Icons.person_outline,
+              label: 'Profile',
+              isSelected: _bottomTabIndex == 3,
+              onTap: () => setState(() => _bottomTabIndex = 3),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   void _showSelector(String title, List<String> options, Function(String) onSelect) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final modalBgColor = isDark ? const Color(0xFF1A1A1A) : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black;
+
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF1A1A1A),
+      backgroundColor: modalBgColor,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
       builder: (context) => Container(
         padding: const EdgeInsets.all(16),
@@ -712,10 +727,10 @@ class _P2PScreenState extends State<P2PScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Select $title', style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
+            Text('Select $title', style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w600)),
             const SizedBox(height: 16),
             ...options.map((opt) => ListTile(
-              title: Text(opt, style: const TextStyle(color: Colors.white)),
+              title: Text(opt, style: TextStyle(color: textColor)),
               onTap: () {
                 Navigator.pop(context);
                 onSelect(opt);
@@ -730,6 +745,11 @@ class _P2PScreenState extends State<P2PScreen> {
   void _showTradeDialog(P2POrder order) {
     final amountController = TextEditingController();
     bool isLoading = false;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final modalBgColor = isDark ? const Color(0xFF1A1A1A) : Colors.white;
+    final cardBgColor = isDark ? const Color(0xFF0D0D0D) : const Color(0xFFF5F5F5);
+    final textColor = isDark ? Colors.white : Colors.black;
+    final subtextColor = isDark ? Colors.grey[600] : Colors.grey[700];
 
     showModalBottomSheet(
       context: context,
@@ -741,9 +761,9 @@ class _P2PScreenState extends State<P2PScreen> {
             left: 20, right: 20, top: 20,
             bottom: MediaQuery.of(context).viewInsets.bottom + 20,
           ),
-          decoration: const BoxDecoration(
-            color: Color(0xFF1A1A1A),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          decoration: BoxDecoration(
+            color: modalBgColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -770,17 +790,17 @@ class _P2PScreenState extends State<P2PScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(order.merchantName ?? 'Merchant', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                        Text(order.merchantName ?? 'Merchant', style: TextStyle(color: textColor, fontWeight: FontWeight.w600)),
                         Text(
                           '${order.merchantTrades ?? 0} Orders | ${order.merchantRating?.toStringAsFixed(0) ?? '0'}%',
-                          style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                          style: TextStyle(color: subtextColor, fontSize: 12),
                         ),
                       ],
                     ),
                   ),
                   GestureDetector(
                     onTap: () => Navigator.pop(context),
-                    child: const Icon(Icons.close, color: Colors.grey),
+                    child: Icon(Icons.close, color: subtextColor),
                   ),
                 ],
               ),
@@ -788,7 +808,7 @@ class _P2PScreenState extends State<P2PScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Price', style: TextStyle(color: Colors.grey[600])),
+                  Text('Price', style: TextStyle(color: subtextColor)),
                   Text(
                     '${_getCurrencySymbol(_selectedFiat)} ${order.price.toStringAsFixed(2)}',
                     style: TextStyle(
@@ -802,7 +822,7 @@ class _P2PScreenState extends State<P2PScreen> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF0D0D0D),
+                  color: cardBgColor,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Column(
@@ -811,40 +831,40 @@ class _P2PScreenState extends State<P2PScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('I want to ${_isBuy ? 'pay' : 'receive'}', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                        Text('I want to ${_isBuy ? 'pay' : 'receive'}', style: TextStyle(color: subtextColor, fontSize: 12)),
                         Text(
                           'Limit: ${order.minAmount.toStringAsFixed(0)} - ${order.maxAmount.toStringAsFixed(0)} $_selectedFiat',
-                          style: TextStyle(color: Colors.grey[600], fontSize: 11),
+                          style: TextStyle(color: subtextColor, fontSize: 11),
                         ),
                       ],
                     ),
                     TextField(
                       controller: amountController,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      style: const TextStyle(color: Colors.white, fontSize: 20),
+                      style: TextStyle(color: textColor, fontSize: 20),
                       decoration: InputDecoration(
                         hintText: '0.00',
-                        hintStyle: TextStyle(color: Colors.grey[700]),
+                        hintStyle: TextStyle(color: isDark ? Colors.grey[700] : Colors.grey[400]),
                         border: InputBorder.none,
                         suffixText: _selectedFiat,
-                        suffixStyle: TextStyle(color: Colors.grey[500]),
+                        suffixStyle: TextStyle(color: subtextColor),
                       ),
                     ),
                   ],
                 ),
               ),
               const SizedBox(height: 12),
-              Text('Payment Methods', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+              Text('Payment Methods', style: TextStyle(color: subtextColor, fontSize: 12)),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
                 children: order.paymentMethods.map((p) => Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF0D0D0D),
+                    color: cardBgColor,
                     borderRadius: BorderRadius.circular(4),
                   ),
-                  child: Text(p, style: const TextStyle(color: Colors.white, fontSize: 12)),
+                  child: Text(p, style: TextStyle(color: textColor, fontSize: 12)),
                 )).toList(),
               ),
               const SizedBox(height: 20),
@@ -925,10 +945,13 @@ class _P2PScreenState extends State<P2PScreen> {
   }
 
   void _showPostAdDialog() {
-    // Implementation for posting a P2P ad
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final modalBgColor = isDark ? const Color(0xFF1A1A1A) : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black;
+
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF1A1A1A),
+      backgroundColor: modalBgColor,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -939,9 +962,9 @@ class _P2PScreenState extends State<P2PScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Post P2P Ad', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600)),
+            Text('Post P2P Ad', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w600)),
             const SizedBox(height: 20),
-            const Text('Coming soon...', style: TextStyle(color: Colors.grey)),
+            Text('Coming soon...', style: TextStyle(color: Colors.grey[600])),
           ],
         ),
       ),
@@ -949,9 +972,13 @@ class _P2PScreenState extends State<P2PScreen> {
   }
 
   void _showAddPaymentMethodDialog() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final modalBgColor = isDark ? const Color(0xFF1A1A1A) : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black;
+
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF1A1A1A),
+      backgroundColor: modalBgColor,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -962,9 +989,9 @@ class _P2PScreenState extends State<P2PScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Add Payment Method', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600)),
+            Text('Add Payment Method', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w600)),
             const SizedBox(height: 20),
-            const Text('Coming soon...', style: TextStyle(color: Colors.grey)),
+            Text('Coming soon...', style: TextStyle(color: Colors.grey[600])),
           ],
         ),
       ),
@@ -1017,13 +1044,19 @@ class _VendorCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBgColor = isDark ? const Color(0xFF0D0D0D) : const Color(0xFFF5F5F5);
+    final textColor = isDark ? Colors.white : Colors.black;
+    final subtextColor = isDark ? Colors.grey[600] : Colors.grey[700];
+    final borderColor = isDark ? Colors.white.withOpacity(0.05) : Colors.grey[300]!;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF0D0D0D),
+        color: cardBgColor,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.white.withOpacity(0.05)),
+        border: Border.all(color: borderColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1051,13 +1084,13 @@ class _VendorCard extends StatelessWidget {
                   children: [
                     Text(
                       order.merchantName ?? 'Merchant',
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500, fontSize: 14),
+                      style: TextStyle(color: textColor, fontWeight: FontWeight.w500, fontSize: 14),
                     ),
                     Row(
                       children: [
-                        Icon(Icons.access_time, color: Colors.grey[600], size: 12),
+                        Icon(Icons.access_time, color: subtextColor, size: 12),
                         const SizedBox(width: 4),
-                        Text('15m', style: TextStyle(color: Colors.grey[600], fontSize: 11)),
+                        Text('15m', style: TextStyle(color: subtextColor, fontSize: 11)),
                       ],
                     ),
                   ],
@@ -1068,7 +1101,7 @@ class _VendorCard extends StatelessWidget {
                 children: [
                   Text(
                     '${order.merchantTrades ?? 0} Orders (${order.merchantRating?.toStringAsFixed(0) ?? '0'}%)',
-                    style: TextStyle(color: Colors.grey[500], fontSize: 11),
+                    style: TextStyle(color: subtextColor, fontSize: 11),
                   ),
                 ],
               ),
@@ -1089,10 +1122,10 @@ class _VendorCard extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Limits', style: TextStyle(color: Colors.grey[600], fontSize: 11)),
+                  Text('Limits', style: TextStyle(color: subtextColor, fontSize: 11)),
                   Text(
                     '${order.minAmount.toStringAsFixed(2)} - ${order.maxAmount.toStringAsFixed(2)} $fiat',
-                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                    style: TextStyle(color: textColor, fontSize: 12),
                   ),
                 ],
               ),
@@ -1100,10 +1133,10 @@ class _VendorCard extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Available', style: TextStyle(color: Colors.grey[600], fontSize: 11)),
+                  Text('Available', style: TextStyle(color: subtextColor, fontSize: 11)),
                   Text(
                     '${order.amount.toStringAsFixed(4)} ${order.currency}',
-                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                    style: TextStyle(color: textColor, fontSize: 12),
                   ),
                 ],
               ),
@@ -1125,7 +1158,7 @@ class _VendorCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 4),
-                    Text(p, style: TextStyle(color: Colors.grey[500], fontSize: 11)),
+                    Text(p, style: TextStyle(color: subtextColor, fontSize: 11)),
                   ],
                 ),
               )),
@@ -1159,6 +1192,10 @@ class _TradeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBgColor = isDark ? const Color(0xFF0D0D0D) : const Color(0xFFF5F5F5);
+    final subtextColor = isDark ? Colors.grey[400] : Colors.grey[700];
+
     Color statusColor;
     switch (trade.status) {
       case 'completed':
@@ -1178,7 +1215,7 @@ class _TradeCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF0D0D0D),
+        color: cardBgColor,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
@@ -1211,8 +1248,8 @@ class _TradeCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Amount: ${trade.amount} ${trade.currency}', style: TextStyle(color: Colors.grey[400], fontSize: 12)),
-              Text('Total: ${trade.total} ${trade.fiatCurrency}', style: TextStyle(color: Colors.grey[400], fontSize: 12)),
+              Text('Amount: ${trade.amount} ${trade.currency}', style: TextStyle(color: subtextColor, fontSize: 12)),
+              Text('Total: ${trade.total} ${trade.fiatCurrency}', style: TextStyle(color: subtextColor, fontSize: 12)),
             ],
           ),
         ],
@@ -1228,11 +1265,16 @@ class _MyAdCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBgColor = isDark ? const Color(0xFF0D0D0D) : const Color(0xFFF5F5F5);
+    final textColor = isDark ? Colors.white : Colors.black;
+    final subtextColor = isDark ? Colors.grey[400] : Colors.grey[700];
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF0D0D0D),
+        color: cardBgColor,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
@@ -1270,12 +1312,12 @@ class _MyAdCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             'Price: ${order.price} ${order.fiatCurrency}',
-            style: const TextStyle(color: Colors.white, fontSize: 14),
+            style: TextStyle(color: textColor, fontSize: 14),
           ),
           const SizedBox(height: 4),
           Text(
             'Available: ${order.amount} ${order.currency}',
-            style: TextStyle(color: Colors.grey[400], fontSize: 12),
+            style: TextStyle(color: subtextColor, fontSize: 12),
           ),
         ],
       ),
@@ -1298,14 +1340,18 @@ class _BottomTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final selectedColor = isDark ? Colors.white : Colors.black;
+    final unselectedColor = isDark ? Colors.grey[600] : Colors.grey[500];
+
     return GestureDetector(
       onTap: onTap,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: isSelected ? Colors.white : Colors.grey[600], size: 22),
+          Icon(icon, color: isSelected ? selectedColor : unselectedColor, size: 22),
           const SizedBox(height: 4),
-          Text(label, style: TextStyle(color: isSelected ? Colors.white : Colors.grey[600], fontSize: 11)),
+          Text(label, style: TextStyle(color: isSelected ? selectedColor : unselectedColor, fontSize: 11)),
         ],
       ),
     );

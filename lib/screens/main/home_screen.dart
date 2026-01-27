@@ -370,13 +370,43 @@ class _HomeScreenState extends State<HomeScreen> {
                       ],
                     ),
                   ),
-                  GestureDetector(
-                    onTap: () => context.push(AppRoutes.deposit),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                      decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(8)),
-                      child: const Text('Deposit', style: TextStyle(color: Colors.black, fontSize: 14, fontWeight: FontWeight.w600)),
-                    ),
+                  Row(
+                    children: [
+                      GestureDetector(
+                        onTap: () => context.push(AppRoutes.deposit),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(8)),
+                          child: const Text('Deposit', style: TextStyle(color: Colors.black, fontSize: 13, fontWeight: FontWeight.w600)),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: () => context.push(AppRoutes.withdraw),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: isDark ? const Color(0xFF1A1A1A) : const Color(0xFFF0F0F0),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: isDark ? Colors.grey[800]! : Colors.grey[300]!, width: 1),
+                          ),
+                          child: Text('Withdraw', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: () => context.push(AppRoutes.transfer),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: isDark ? const Color(0xFF1A1A1A) : const Color(0xFFF0F0F0),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: isDark ? Colors.grey[800]! : Colors.grey[300]!, width: 1),
+                          ),
+                          child: Text('Transfer', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -687,7 +717,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _loadNotifications() async {
     try {
       final notifications = await notificationService.fetchNotifications(limit: 5);
-      final count = await notificationService.getUnreadCount();
+      final count = await notificationService.fetchUnreadCount();
       if (mounted) {
         setState(() {
           _notifications = notifications;
@@ -754,11 +784,11 @@ class _HomeScreenState extends State<HomeScreen> {
                               )
                             : Column(
                                 children: _notifications.map((n) => _NotificationItem(
-                                  icon: _getNotificationIcon(n.type),
+                                  icon: _getNotificationIcon(n.type.name),
                                   title: n.title,
-                                  message: n.message,
-                                  time: _formatTime(n.createdAt),
-                                  color: _getNotificationColor(n.type),
+                                  message: n.body,
+                                  time: _formatTime(n.timestamp),
+                                  color: _getNotificationColor(n.type.name),
                                   isUnread: !n.isRead,
                                   onTap: () {
                                     _removeNotificationOverlay();
@@ -800,26 +830,26 @@ class _HomeScreenState extends State<HomeScreen> {
 
   IconData _getNotificationIcon(String type) {
     switch (type.toLowerCase()) {
-      case 'deposit': return Icons.south_west;
-      case 'withdrawal': return Icons.north_east;
-      case 'trade': return Icons.swap_horiz;
-      case 'price_alert': return Icons.trending_up;
-      case 'security': return Icons.security;
+      case 'transaction': return Icons.receipt_long;
+      case 'trade': return Icons.candlestick_chart;
+      case 'p2p': return Icons.swap_horiz;
       case 'kyc': return Icons.verified_user;
-      case 'reward': return Icons.card_giftcard;
+      case 'security': return Icons.security;
+      case 'marketing': return Icons.campaign;
+      case 'system': return Icons.info_outline;
       default: return Icons.notifications;
     }
   }
 
   Color _getNotificationColor(String type) {
     switch (type.toLowerCase()) {
-      case 'deposit': return AppColors.success;
-      case 'withdrawal': return AppColors.warning;
+      case 'transaction': return AppColors.success;
       case 'trade': return AppColors.info;
-      case 'price_alert': return AppColors.tradingBuy;
-      case 'security': return Colors.orange;
+      case 'p2p': return AppColors.warning;
       case 'kyc': return AppColors.primary;
-      case 'reward': return AppColors.warning;
+      case 'security': return Colors.orange;
+      case 'marketing': return AppColors.tradingBuy;
+      case 'system': return Colors.grey;
       default: return AppColors.primary;
     }
   }

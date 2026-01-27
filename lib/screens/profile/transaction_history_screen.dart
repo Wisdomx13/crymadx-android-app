@@ -26,6 +26,11 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
   bool _isLoading = true;
   String? _error;
 
+  // Search state
+  String _searchQuery = '';
+  String? _searchAssetFilter;
+  DateTime? _searchDateFrom;
+
   // Summary stats
   double _totalDeposits = 0;
   double _totalWithdrawals = 0;
@@ -83,34 +88,98 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
   }
 
   List<Transaction> get _filteredTransactions {
-    if (_selectedFilter == 'All') return _transactions;
+    List<Transaction> result = _transactions;
 
-    final filterType = _selectedFilter.toLowerCase();
-    return _transactions.where((t) => t.type.toLowerCase() == filterType).toList();
+    // Apply type filter
+    if (_selectedFilter != 'All') {
+      final filterType = _selectedFilter.toLowerCase();
+      result = result.where((t) => t.type.toLowerCase() == filterType).toList();
+    }
+
+    // Apply search query filter
+    if (_searchQuery.isNotEmpty) {
+      final query = _searchQuery.toLowerCase();
+      result = result.where((t) =>
+        t.currency.toLowerCase().contains(query) ||
+        t.id.toLowerCase().contains(query) ||
+        t.type.toLowerCase().contains(query) ||
+        (t.txHash?.toLowerCase().contains(query) ?? false) ||
+        (t.toAddress?.toLowerCase().contains(query) ?? false)
+      ).toList();
+    }
+
+    // Apply asset filter
+    if (_searchAssetFilter != null) {
+      result = result.where((t) => t.currency.toUpperCase() == _searchAssetFilter).toList();
+    }
+
+    // Apply date filter
+    if (_searchDateFrom != null) {
+      result = result.where((t) => t.createdAt.isAfter(_searchDateFrom!)).toList();
+    }
+
+    return result;
+  }
+
+  void _applySearch(String query) {
+    setState(() {
+      _searchQuery = query;
+    });
+  }
+
+  void _applyAssetFilter(String? asset) {
+    setState(() {
+      _searchAssetFilter = asset;
+    });
+  }
+
+  void _applyDateFilter(int? days) {
+    setState(() {
+      if (days != null) {
+        _searchDateFrom = DateTime.now().subtract(Duration(days: days));
+      } else {
+        _searchDateFrom = null;
+      }
+    });
+  }
+
+  void _clearFilters() {
+    setState(() {
+      _searchQuery = '';
+      _searchAssetFilter = null;
+      _searchDateFrom = null;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgColor = isDark ? AppColors.backgroundPrimary : Colors.white;
+    final textColor = isDark ? AppColors.textPrimary : Colors.black;
+    final cardColor = isDark ? AppColors.backgroundCard : const Color(0xFFF5F5F5);
+    final borderColor = isDark ? AppColors.glassBorder : Colors.grey[300]!;
+    final subtextColor = isDark ? AppColors.textSecondary : Colors.grey[700]!;
+
     return Scaffold(
-      backgroundColor: AppColors.backgroundPrimary,
+      backgroundColor: bgColor,
       appBar: AppBar(
-        backgroundColor: AppColors.backgroundPrimary,
+        backgroundColor: bgColor,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: AppColors.textPrimary),
+          icon: Icon(Icons.arrow_back, color: textColor),
           onPressed: () => context.pop(),
         ),
         title: Text(
           'Transaction History',
           style: AppTypography.headlineSmall.copyWith(
-            color: AppColors.textPrimary,
+            color: textColor,
             fontWeight: FontWeight.w700,
           ),
         ),
         centerTitle: true,
         actions: [
           IconButton(
-            icon: Icon(Icons.search, color: AppColors.textPrimary),
+            icon: Icon(Icons.search, color: textColor),
             onPressed: () => _showSearchModal(),
           ),
         ],
@@ -135,18 +204,18 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
                     decoration: BoxDecoration(
                       color: isSelected
                           ? AppColors.primary
-                          : AppColors.backgroundCard,
+                          : cardColor,
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
                         color: isSelected
                             ? AppColors.primary
-                            : AppColors.glassBorder,
+                            : borderColor,
                       ),
                     ),
                     child: Text(
                       filter,
                       style: TextStyle(
-                        color: isSelected ? Colors.black : AppColors.textSecondary,
+                        color: isSelected ? Colors.black : subtextColor,
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                       ),
@@ -160,15 +229,21 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
           // Summary card - real data
           Padding(
             padding: const EdgeInsets.all(AppSpacing.md),
-            child: GlassCard(
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: cardColor,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: borderColor),
+              ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _buildSummaryItem('Total Deposits', '\$${_totalDeposits.toStringAsFixed(2)}', AppColors.tradingBuy),
-                  Container(width: 1, height: 40, color: AppColors.glassBorder),
-                  _buildSummaryItem('Total Withdrawals', '\$${_totalWithdrawals.toStringAsFixed(2)}', AppColors.tradingSell),
-                  Container(width: 1, height: 40, color: AppColors.glassBorder),
-                  _buildSummaryItem('Net Flow', '${_totalDeposits - _totalWithdrawals >= 0 ? '+' : ''}\$${(_totalDeposits - _totalWithdrawals).toStringAsFixed(2)}', AppColors.info),
+                  _buildSummaryItem('Total Deposits', '\$${_totalDeposits.toStringAsFixed(2)}', AppColors.tradingBuy, isDark),
+                  Container(width: 1, height: 40, color: borderColor),
+                  _buildSummaryItem('Total Withdrawals', '\$${_totalWithdrawals.toStringAsFixed(2)}', AppColors.tradingSell, isDark),
+                  Container(width: 1, height: 40, color: borderColor),
+                  _buildSummaryItem('Net Flow', '${_totalDeposits - _totalWithdrawals >= 0 ? '+' : ''}\$${(_totalDeposits - _totalWithdrawals).toStringAsFixed(2)}', AppColors.info, isDark),
                 ],
               ),
             ),
@@ -179,9 +254,9 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _error != null
-                    ? _buildErrorState()
+                    ? _buildErrorState(isDark)
                     : _filteredTransactions.isEmpty
-                        ? _buildEmptyState()
+                        ? _buildEmptyState(isDark)
                         : RefreshIndicator(
                             onRefresh: _loadTransactions,
                             child: ListView.builder(
@@ -189,7 +264,7 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
                               itemCount: _filteredTransactions.length,
                               itemBuilder: (context, index) {
                                 final tx = _filteredTransactions[index];
-                                return _buildTransactionItem(tx);
+                                return _buildTransactionItem(tx, isDark);
                               },
                             ),
                           ),
@@ -199,7 +274,8 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
     );
   }
 
-  Widget _buildSummaryItem(String label, String value, Color color) {
+  Widget _buildSummaryItem(String label, String value, Color color, bool isDark) {
+    final subtextColor = isDark ? AppColors.textMuted : Colors.grey[700]!;
     return Column(
       children: [
         Text(
@@ -212,13 +288,18 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
         const SizedBox(height: 4),
         Text(
           label,
-          style: AppTypography.caption.copyWith(color: AppColors.textMuted),
+          style: AppTypography.caption.copyWith(color: subtextColor),
         ),
       ],
     );
   }
 
-  Widget _buildTransactionItem(Transaction tx) {
+  Widget _buildTransactionItem(Transaction tx, bool isDark) {
+    final cardColor = isDark ? AppColors.backgroundCard : const Color(0xFFF5F5F5);
+    final borderColor = isDark ? AppColors.glassBorder : Colors.grey[300]!;
+    final textColor = isDark ? AppColors.textPrimary : Colors.black;
+    final subtextColor = isDark ? AppColors.textMuted : Colors.grey[700]!;
+
     IconData icon;
     Color iconColor;
     String typeLabel;
@@ -266,18 +347,18 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
         statusColor = AppColors.tradingSell;
         break;
       default:
-        statusColor = AppColors.textMuted;
+        statusColor = subtextColor;
     }
 
     return GestureDetector(
-      onTap: () => _showTransactionDetails(tx),
+      onTap: () => _showTransactionDetails(tx, isDark),
       child: Container(
         margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: AppColors.backgroundCard,
+          color: cardColor,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.glassBorder),
+          border: Border.all(color: borderColor),
         ),
         child: Row(
           children: [
@@ -302,7 +383,7 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
                       Text(
                         typeLabel,
                         style: AppTypography.bodyMedium.copyWith(
-                          color: AppColors.textPrimary,
+                          color: textColor,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -327,7 +408,7 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
                   const SizedBox(height: 4),
                   Text(
                     tx.network != null ? 'via ${tx.network}' : _formatDate(tx.createdAt),
-                    style: AppTypography.caption.copyWith(color: AppColors.textMuted),
+                    style: AppTypography.caption.copyWith(color: subtextColor),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -354,7 +435,7 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
                 ),
                 Text(
                   _formatDate(tx.createdAt),
-                  style: AppTypography.caption.copyWith(color: AppColors.textMuted),
+                  style: AppTypography.caption.copyWith(color: subtextColor),
                 ),
               ],
             ),
@@ -364,28 +445,30 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState(bool isDark) {
+    final subtextColor = isDark ? AppColors.textMuted : Colors.grey[700]!;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.receipt_long, color: AppColors.textMuted, size: 64),
+          Icon(Icons.receipt_long, color: subtextColor, size: 64),
           const SizedBox(height: 16),
           Text(
             'No transactions found',
-            style: AppTypography.titleMedium.copyWith(color: AppColors.textMuted),
+            style: AppTypography.titleMedium.copyWith(color: subtextColor),
           ),
           const SizedBox(height: 8),
           Text(
             'Your transaction history will appear here',
-            style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
+            style: AppTypography.bodySmall.copyWith(color: subtextColor),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildErrorState() {
+  Widget _buildErrorState(bool isDark) {
+    final subtextColor = isDark ? AppColors.textMuted : Colors.grey[700]!;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -394,12 +477,12 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
           const SizedBox(height: 16),
           Text(
             'Failed to load transactions',
-            style: AppTypography.titleMedium.copyWith(color: AppColors.textMuted),
+            style: AppTypography.titleMedium.copyWith(color: subtextColor),
           ),
           const SizedBox(height: 8),
           Text(
             _error ?? 'Unknown error',
-            style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
+            style: AppTypography.bodySmall.copyWith(color: subtextColor),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 16),
@@ -416,10 +499,15 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
     );
   }
 
-  void _showTransactionDetails(Transaction tx) {
+  void _showTransactionDetails(Transaction tx, bool isDark) {
+    final modalBgColor = isDark ? AppColors.backgroundSecondary : Colors.white;
+    final textColor = isDark ? AppColors.textPrimary : Colors.black;
+    final subtextColor = isDark ? AppColors.textMuted : Colors.grey[700]!;
+    final borderColor = isDark ? AppColors.glassBorder : Colors.grey[300]!;
+
     showModalBottomSheet(
       context: context,
-      backgroundColor: AppColors.backgroundSecondary,
+      backgroundColor: modalBgColor,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -434,13 +522,13 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
                 Text(
                   'Transaction Details',
                   style: AppTypography.titleLarge.copyWith(
-                    color: AppColors.textPrimary,
+                    color: textColor,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
                 GestureDetector(
                   onTap: () => Navigator.pop(context),
-                  child: Icon(Icons.close, color: AppColors.textPrimary),
+                  child: Icon(Icons.close, color: textColor),
                 ),
               ],
             ),
@@ -456,32 +544,32 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
                     Text(
                       '${tx.amount} ${tx.currency}',
                       style: AppTypography.titleLarge.copyWith(
-                        color: AppColors.textPrimary,
+                        color: textColor,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                     if (tx.fee != null)
                       Text(
                         'Fee: ${tx.fee} ${tx.currency}',
-                        style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
+                        style: AppTypography.bodySmall.copyWith(color: subtextColor),
                       ),
                   ],
                 ),
               ],
             ),
             const SizedBox(height: AppSpacing.lg),
-            Divider(color: AppColors.glassBorder),
+            Divider(color: borderColor),
             const SizedBox(height: AppSpacing.md),
-            _buildDetailRow('Type', tx.type.toUpperCase()),
-            _buildDetailRow('Status', tx.status.toUpperCase()),
-            _buildDetailRow('Transaction ID', tx.id),
-            _buildDetailRow('Date', _formatDate(tx.createdAt)),
+            _buildDetailRow('Type', tx.type.toUpperCase(), isDark),
+            _buildDetailRow('Status', tx.status.toUpperCase(), isDark),
+            _buildDetailRow('Transaction ID', tx.id, isDark),
+            _buildDetailRow('Date', _formatDate(tx.createdAt), isDark),
             if (tx.network != null)
-              _buildDetailRow('Network', tx.network!),
+              _buildDetailRow('Network', tx.network!, isDark),
             if (tx.txHash != null)
-              _buildDetailRow('TX Hash', tx.txHash!, isCopyable: true),
+              _buildDetailRow('TX Hash', tx.txHash!, isDark, isCopyable: true),
             if (tx.toAddress != null)
-              _buildDetailRow('To Address', tx.toAddress!, isCopyable: true),
+              _buildDetailRow('To Address', tx.toAddress!, isDark, isCopyable: true),
             const SizedBox(height: AppSpacing.lg),
           ],
         ),
@@ -489,7 +577,10 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
     );
   }
 
-  Widget _buildDetailRow(String label, String value, {bool isCopyable = false}) {
+  Widget _buildDetailRow(String label, String value, bool isDark, {bool isCopyable = false}) {
+    final textColor = isDark ? AppColors.textPrimary : Colors.black;
+    final subtextColor = isDark ? AppColors.textMuted : Colors.grey[700]!;
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
@@ -497,14 +588,14 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
         children: [
           Text(
             label,
-            style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
+            style: AppTypography.bodySmall.copyWith(color: subtextColor),
           ),
           Row(
             children: [
               Text(
                 value.length > 20 ? '${value.substring(0, 18)}...' : value,
                 style: AppTypography.bodySmall.copyWith(
-                  color: AppColors.textPrimary,
+                  color: textColor,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -533,74 +624,148 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
   }
 
   void _showSearchModal() {
+    final searchController = TextEditingController(text: _searchQuery);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final modalBgColor = isDark ? AppColors.backgroundSecondary : Colors.white;
+    final textColor = isDark ? AppColors.textPrimary : Colors.black;
+    final subtextColor = isDark ? AppColors.textMuted : Colors.grey[700]!;
+    final cardColor = isDark ? AppColors.backgroundCard : const Color(0xFFF5F5F5);
+
     showModalBottomSheet(
       context: context,
-      backgroundColor: AppColors.backgroundSecondary,
+      backgroundColor: modalBgColor,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(
-          left: AppSpacing.lg,
-          right: AppSpacing.lg,
-          top: AppSpacing.lg,
-          bottom: MediaQuery.of(context).viewInsets.bottom + AppSpacing.lg,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Search Transactions',
-                  style: AppTypography.titleLarge.copyWith(
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.w700,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => Padding(
+          padding: EdgeInsets.only(
+            left: AppSpacing.lg,
+            right: AppSpacing.lg,
+            top: AppSpacing.lg,
+            bottom: MediaQuery.of(context).viewInsets.bottom + AppSpacing.lg,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Search Transactions',
+                    style: AppTypography.titleLarge.copyWith(
+                      color: textColor,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Icon(Icons.close, color: textColor),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              TextField(
+                controller: searchController,
+                autofocus: true,
+                style: TextStyle(color: textColor),
+                decoration: InputDecoration(
+                  hintText: 'Search by asset, ID, or description...',
+                  hintStyle: TextStyle(color: subtextColor),
+                  prefixIcon: Icon(Icons.search, color: subtextColor),
+                  suffixIcon: searchController.text.isNotEmpty
+                      ? IconButton(
+                          icon: Icon(Icons.clear, color: subtextColor, size: 20),
+                          onPressed: () {
+                            searchController.clear();
+                            setModalState(() {});
+                          },
+                        )
+                      : null,
+                  filled: true,
+                  fillColor: cardColor,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
                   ),
                 ),
-                GestureDetector(
-                  onTap: () => Navigator.pop(context),
-                  child: Icon(Icons.close, color: AppColors.textPrimary),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            TextField(
-              autofocus: true,
-              style: TextStyle(color: AppColors.textPrimary),
-              decoration: InputDecoration(
-                hintText: 'Search by asset, ID, or description...',
-                hintStyle: TextStyle(color: AppColors.textMuted),
-                prefixIcon: Icon(Icons.search, color: AppColors.textMuted),
-                filled: true,
-                fillColor: AppColors.backgroundCard,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
+                onChanged: (value) => setModalState(() {}),
+                onSubmitted: (value) {
+                  _applySearch(value);
+                  Navigator.pop(context);
+                },
               ),
-              onSubmitted: (value) {
-                Navigator.pop(context);
-                // Implement search
-              },
-            ),
-            const SizedBox(height: AppSpacing.md),
-            // Quick filters
-            Wrap(
-              spacing: 8,
-              children: ['BTC', 'ETH', 'USDT', 'Last 7 days', 'Last 30 days'].map((filter) {
-                return ActionChip(
-                  label: Text(filter),
-                  labelStyle: TextStyle(color: AppColors.textSecondary, fontSize: 12),
-                  backgroundColor: AppColors.backgroundCard,
-                  onPressed: () {},
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-          ],
+              const SizedBox(height: AppSpacing.md),
+              // Quick filters - Assets
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _buildQuickFilterChip('BTC', _searchAssetFilter == 'BTC', () {
+                    _applyAssetFilter(_searchAssetFilter == 'BTC' ? null : 'BTC');
+                    Navigator.pop(context);
+                  }, isDark),
+                  _buildQuickFilterChip('ETH', _searchAssetFilter == 'ETH', () {
+                    _applyAssetFilter(_searchAssetFilter == 'ETH' ? null : 'ETH');
+                    Navigator.pop(context);
+                  }, isDark),
+                  _buildQuickFilterChip('USDT', _searchAssetFilter == 'USDT', () {
+                    _applyAssetFilter(_searchAssetFilter == 'USDT' ? null : 'USDT');
+                    Navigator.pop(context);
+                  }, isDark),
+                  _buildQuickFilterChip('Last 7 days', _searchDateFrom != null && DateTime.now().difference(_searchDateFrom!).inDays <= 7, () {
+                    _applyDateFilter(_searchDateFrom != null && DateTime.now().difference(_searchDateFrom!).inDays <= 7 ? null : 7);
+                    Navigator.pop(context);
+                  }, isDark),
+                  _buildQuickFilterChip('Last 30 days', _searchDateFrom != null && DateTime.now().difference(_searchDateFrom!).inDays <= 30, () {
+                    _applyDateFilter(_searchDateFrom != null && DateTime.now().difference(_searchDateFrom!).inDays <= 30 ? null : 30);
+                    Navigator.pop(context);
+                  }, isDark),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.md),
+              // Clear filters button
+              if (_searchQuery.isNotEmpty || _searchAssetFilter != null || _searchDateFrom != null)
+                TextButton.icon(
+                  onPressed: () {
+                    _clearFilters();
+                    Navigator.pop(context);
+                  },
+                  icon: Icon(Icons.clear_all, color: AppColors.tradingSell, size: 18),
+                  label: Text('Clear all filters', style: TextStyle(color: AppColors.tradingSell)),
+                ),
+              const SizedBox(height: AppSpacing.sm),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuickFilterChip(String label, bool isSelected, VoidCallback onTap, bool isDark) {
+    final cardColor = isDark ? AppColors.backgroundCard : const Color(0xFFF5F5F5);
+    final borderColor = isDark ? AppColors.glassBorder : Colors.grey[300]!;
+    final subtextColor = isDark ? AppColors.textSecondary : Colors.grey[700]!;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.primary : cardColor,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? AppColors.primary : borderColor,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.black : subtextColor,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
     );

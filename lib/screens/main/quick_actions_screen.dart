@@ -130,8 +130,15 @@ class QuickActionsScreen extends StatelessWidget {
                     icon: Icons.swap_horiz_rounded,
                     label: 'Transfer',
                     description: 'Move between accounts',
-                    color: const Color(0xFF3F51B5),
+                    color: const Color(0xFFFF9800),
                     onTap: () => context.push(AppRoutes.transfer),
+                  ),
+                  _QuickAction(
+                    icon: Icons.sync_alt_rounded,
+                    label: 'Convert',
+                    description: 'Swap crypto instantly',
+                    color: const Color(0xFF2196F3),
+                    onTap: () => context.push(AppRoutes.convert),
                   ),
                   _QuickAction(
                     icon: Icons.credit_score_rounded,

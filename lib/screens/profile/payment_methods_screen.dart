@@ -700,7 +700,7 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
             bottom: MediaQuery.of(context).viewInsets.bottom + AppSpacing.lg,
           ),
           child: SingleChildScrollView(
-          child: Column(
+            child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -842,17 +842,17 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                   children: [
                     Text(
                       'Add Bank Account',
-                    style: AppTypography.titleLarge.copyWith(
-                      color: textColor,
-                      fontWeight: FontWeight.w700,
+                      style: AppTypography.titleLarge.copyWith(
+                        color: textColor,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                  ),
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: Icon(Icons.close, color: textColor),
-                  ),
-                ],
-              ),
+                    GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: Icon(Icons.close, color: textColor),
+                    ),
+                  ],
+                ),
               const SizedBox(height: AppSpacing.lg),
               _buildTextField('Bank Name', _bankNameController, Icons.account_balance),
               const SizedBox(height: AppSpacing.md),
@@ -926,6 +926,7 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
             ],
           ),
         ),
+      ),
       ),
     );
   }

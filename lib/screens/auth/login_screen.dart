@@ -339,30 +339,35 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Row(
-                        children: [
-                          SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: Checkbox(
-                              value: _rememberMe,
-                              onChanged: (v) => setState(() => _rememberMe = v!),
-                              activeColor: AppColors.primary,
-                              side: BorderSide(color: Colors.grey[700]!),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(3),
+                      GestureDetector(
+                        onTap: () => setState(() => _rememberMe = !_rememberMe),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 18,
+                              height: 18,
+                              decoration: BoxDecoration(
+                                color: _rememberMe ? AppColors.primary : Colors.transparent,
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(
+                                  color: _rememberMe ? AppColors.primary : Colors.grey[700]!,
+                                  width: 1.5,
+                                ),
+                              ),
+                              child: _rememberMe
+                                  ? const Icon(Icons.check, size: 14, color: Colors.black)
+                                  : null,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Remember me',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[500],
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            'Remember me',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey[500],
-                            ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                       GestureDetector(
                         onTap: () => _showForgotPassword(context),

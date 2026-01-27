@@ -2,12 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
+import 'dart:async';
 import '../../theme/colors.dart';
 import '../../theme/typography.dart';
 import '../../theme/spacing.dart';
 import '../../widgets/crypto_icon.dart';
 import '../../widgets/app_button.dart';
 import '../../providers/balance_provider.dart';
+import '../../navigation/app_router.dart';
 
 // Network info for withdrawals (static config - can be fetched from API later)
 class NetworkInfo {
@@ -77,6 +80,19 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
   bool _isProcessing = false;
   String _searchQuery = '';
 
+  // Validation states
+  bool _isAddressValid = false;
+  String? _addressError;
+  bool _isValidatingAddress = false;
+
+  // Verification states
+  bool _requiresVerification = true;
+  String _verificationMethod = 'email'; // 'email' or '2fa'
+  final _verificationCodeController = TextEditingController();
+  bool _verificationCodeSent = false;
+  int _resendCountdown = 0;
+  Timer? _resendTimer;
+
   @override
   void initState() {
     super.initState();
@@ -121,6 +137,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
   bool get _isValid {
     if (_selectedAsset == null || _selectedNetwork == null) return false;
     if (_addressController.text.isEmpty) return false;
+    if (!_isAddressValid) return false;
     if (_withdrawAmount <= 0) return false;
     if (_withdrawAmount > _selectedAsset!.available) return false;
     if (_withdrawAmount < _selectedNetwork!.minWithdraw) return false;
@@ -132,7 +149,109 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
     _addressController.dispose();
     _amountController.dispose();
     _memoController.dispose();
+    _verificationCodeController.dispose();
+    _resendTimer?.cancel();
     super.dispose();
+  }
+
+  // Address validation based on network/currency
+  void _validateAddress(String address) async {
+    if (address.isEmpty) {
+      setState(() {
+        _isAddressValid = false;
+        _addressError = null;
+        _isValidatingAddress = false;
+      });
+      return;
+    }
+
+    setState(() => _isValidatingAddress = true);
+
+    // Simulate API validation delay
+    await Future.delayed(const Duration(milliseconds: 100));
+
+    if (!mounted) return;
+
+    // Basic address validation based on currency
+    bool isValid = false;
+    String? error;
+
+    final currency = _selectedAsset?.symbol.toUpperCase() ?? '';
+    final network = _selectedNetwork?.shortName.toUpperCase() ?? '';
+
+    if (currency == 'BTC') {
+      // Bitcoin address validation (basic)
+      isValid = (address.startsWith('1') || address.startsWith('3') || address.startsWith('bc1')) &&
+          address.length >= 26 && address.length <= 62;
+      if (!isValid) error = 'Invalid Bitcoin address format';
+    } else if (currency == 'ETH' || network == 'ERC20' || network == 'ARB') {
+      // Ethereum address validation
+      isValid = address.startsWith('0x') && address.length == 42;
+      if (!isValid) error = 'Invalid Ethereum address format';
+    } else if (network == 'TRC20') {
+      // Tron address validation
+      isValid = address.startsWith('T') && address.length == 34;
+      if (!isValid) error = 'Invalid Tron address format';
+    } else if (currency == 'SOL') {
+      // Solana address validation
+      isValid = address.length >= 32 && address.length <= 44;
+      if (!isValid) error = 'Invalid Solana address format';
+    } else {
+      // Generic validation for other currencies
+      isValid = address.length >= 20;
+      if (!isValid) error = 'Invalid address format';
+    }
+
+    setState(() {
+      _isAddressValid = isValid;
+      _addressError = error;
+      _isValidatingAddress = false;
+    });
+  }
+
+  // Send verification code
+  void _sendVerificationCode() async {
+    setState(() => _isProcessing = true);
+
+    // Simulate API call
+    await Future.delayed(const Duration(milliseconds: 200));
+
+    if (mounted) {
+      setState(() {
+        _verificationCodeSent = true;
+        _resendCountdown = 60;
+        _isProcessing = false;
+      });
+
+      // Start countdown timer
+      _resendTimer?.cancel();
+      _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        if (_resendCountdown > 0) {
+          setState(() => _resendCountdown--);
+        } else {
+          timer.cancel();
+        }
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_verificationMethod == 'email'
+              ? 'Verification code sent to your email'
+              : 'Enter the code from your authenticator app'),
+          backgroundColor: AppColors.tradingBuy,
+        ),
+      );
+    }
+  }
+
+  // QR Scanner
+  void _openQRScanner() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _buildQRScannerSheet(),
+    );
   }
 
   void _selectAsset(AssetBalance asset) {
@@ -157,10 +276,10 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
     setState(() {});
   }
 
-  void _pasteAddress() async {
+  Future<void> _pasteAddress() async {
     final data = await Clipboard.getData(Clipboard.kTextPlain);
     if (data?.text != null) {
-      _addressController.text = data!.text!;
+      _addressController.text = data!.text!.trim();
       setState(() {});
     }
   }
@@ -177,13 +296,47 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
   void _processWithdraw() async {
     if (!_isValid) return;
 
+    // Show verification modal
+    _showVerificationModal();
+  }
+
+  void _showVerificationModal() {
+    _verificationCodeController.clear();
+    setState(() {
+      _verificationCodeSent = false;
+      _resendCountdown = 0;
+    });
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      isDismissible: false,
+      enableDrag: false,
+      builder: (context) => _buildVerificationSheet(),
+    );
+  }
+
+  void _completeWithdrawal() async {
+    final code = _verificationCodeController.text;
+    if (code.length != 6) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Please enter a valid 6-digit code'),
+          backgroundColor: AppColors.tradingSell,
+        ),
+      );
+      return;
+    }
+
     setState(() => _isProcessing = true);
 
-    // Simulate processing
-    await Future.delayed(const Duration(seconds: 2));
+    // Simulate API call to verify code and process withdrawal
+    await Future.delayed(const Duration(milliseconds: 300));
 
     if (mounted) {
       setState(() => _isProcessing = false);
+      Navigator.pop(context); // Close verification modal
 
       // Show success dialog
       showDialog(
@@ -433,62 +586,128 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
   }
 
   Widget _buildAddressInput() {
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFF1A1A1A),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF2A2A2A)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextField(
-              controller: _addressController,
-              style: const TextStyle(color: Colors.white, fontSize: 14),
-              decoration: InputDecoration(
-                hintText: 'Enter or paste address',
-                hintStyle: TextStyle(color: AppColors.textTertiary, fontSize: 14),
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-              ),
-              onChanged: (_) => setState(() {}),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFF1A1A1A),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: _addressError != null
+                  ? AppColors.tradingSell
+                  : _isAddressValid
+                      ? AppColors.tradingBuy
+                      : const Color(0xFF2A2A2A),
             ),
           ),
-          GestureDetector(
-            onTap: _pasteAddress,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              margin: const EdgeInsets.only(right: 8),
-              decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(
-                'Paste',
-                style: TextStyle(
-                  color: AppColors.primary,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _addressController,
+                  style: const TextStyle(color: Colors.white, fontSize: 14),
+                  decoration: InputDecoration(
+                    hintText: 'Enter or paste address',
+                    hintStyle: TextStyle(color: AppColors.textTertiary, fontSize: 14),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                    suffixIcon: _isValidatingAddress
+                        ? Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+                              ),
+                            ),
+                          )
+                        : _isAddressValid
+                            ? Icon(Icons.check_circle, color: AppColors.tradingBuy, size: 20)
+                            : null,
+                  ),
+                  onChanged: (value) {
+                    setState(() {});
+                    _validateAddress(value);
+                  },
                 ),
               ),
-            ),
-          ),
-          GestureDetector(
-            onTap: () {
-              // TODO: Implement QR scanner
-            },
-            child: Container(
-              padding: const EdgeInsets.all(10),
-              margin: const EdgeInsets.only(right: 8),
-              decoration: BoxDecoration(
-                color: const Color(0xFF2A2A2A),
-                borderRadius: BorderRadius.circular(8),
+              GestureDetector(
+                onTap: () async {
+                  await _pasteAddress();
+                  _validateAddress(_addressController.text);
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  margin: const EdgeInsets.only(right: 8),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    'Paste',
+                    style: TextStyle(
+                      color: AppColors.primary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
               ),
-              child: Icon(Icons.qr_code_scanner, color: AppColors.textSecondary, size: 20),
+              GestureDetector(
+                onTap: _openQRScanner,
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  margin: const EdgeInsets.only(right: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2A2A2A),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(Icons.qr_code_scanner, color: AppColors.textSecondary, size: 20),
+                ),
+              ),
+            ],
+          ),
+        ),
+        // Error message
+        if (_addressError != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8, left: 4),
+            child: Row(
+              children: [
+                Icon(Icons.error_outline, color: AppColors.tradingSell, size: 14),
+                const SizedBox(width: 4),
+                Text(
+                  _addressError!,
+                  style: TextStyle(
+                    color: AppColors.tradingSell,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
             ),
           ),
-        ],
-      ),
+        // Valid address indicator
+        if (_isAddressValid && _addressError == null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8, left: 4),
+            child: Row(
+              children: [
+                Icon(Icons.check_circle_outline, color: AppColors.tradingBuy, size: 14),
+                const SizedBox(width: 4),
+                Text(
+                  'Valid ${_selectedNetwork?.shortName ?? ''} address',
+                  style: TextStyle(
+                    color: AppColors.tradingBuy,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 
@@ -920,7 +1139,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
             GestureDetector(
               onTap: () {
                 Navigator.pop(ctx);
-                // TODO: Navigate to transaction history
+                context.push(AppRoutes.transactionHistory);
               },
               child: Text(
                 'View Transaction History',
@@ -934,6 +1153,454 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  // QR Scanner Sheet
+  Widget _buildQRScannerSheet() {
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.7,
+      decoration: const BoxDecoration(
+        color: Color(0xFF121212),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        children: [
+          // Handle bar
+          Container(
+            margin: const EdgeInsets.only(top: 12),
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: const Color(0xFF3A3A3A),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          // Header
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Scan QR Code',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: Icon(Icons.close, color: AppColors.textSecondary),
+                ),
+              ],
+            ),
+          ),
+          // Scanner
+          Expanded(
+            child: Container(
+              margin: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.primary, width: 2),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: MobileScanner(
+                  onDetect: (capture) {
+                    final List<Barcode> barcodes = capture.barcodes;
+                    for (final barcode in barcodes) {
+                      if (barcode.rawValue != null) {
+                        String scannedAddress = barcode.rawValue!;
+
+                        // Handle crypto URI schemes (e.g., bitcoin:address, ethereum:address)
+                        if (scannedAddress.contains(':')) {
+                          final parts = scannedAddress.split(':');
+                          if (parts.length > 1) {
+                            scannedAddress = parts[1].split('?').first;
+                          }
+                        }
+
+                        _addressController.text = scannedAddress.trim();
+                        _validateAddress(scannedAddress.trim());
+                        Navigator.pop(context);
+
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: const Text('Address scanned successfully'),
+                            backgroundColor: AppColors.tradingBuy,
+                          ),
+                        );
+                        break;
+                      }
+                    }
+                  },
+                ),
+              ),
+            ),
+          ),
+          // Instructions
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text(
+              'Position the QR code within the frame to scan',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 14,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+
+  // Verification Sheet
+  Widget _buildVerificationSheet() {
+    return StatefulBuilder(
+      builder: (context, setSheetState) {
+        return Container(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+          ),
+          decoration: const BoxDecoration(
+            color: Color(0xFF121212),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Handle bar
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF3A3A3A),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                // Header
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Security Verification',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: Icon(Icons.close, color: AppColors.textSecondary),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Please verify your identity to complete this withdrawal',
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // Withdrawal Summary
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1A1A1A),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Amount', style: TextStyle(color: AppColors.textTertiary, fontSize: 13)),
+                          Text(
+                            '$_withdrawAmount ${_selectedAsset?.symbol ?? ''}',
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('To', style: TextStyle(color: AppColors.textTertiary, fontSize: 13)),
+                          Text(
+                            '${_addressController.text.substring(0, 8)}...${_addressController.text.substring(_addressController.text.length - 6)}',
+                            style: const TextStyle(color: Colors.white, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // Verification Method Selector
+                Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () {
+                          setSheetState(() {
+                            _verificationMethod = 'email';
+                            _verificationCodeSent = false;
+                            _verificationCodeController.clear();
+                          });
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          decoration: BoxDecoration(
+                            color: _verificationMethod == 'email'
+                                ? AppColors.primary.withOpacity(0.15)
+                                : const Color(0xFF1A1A1A),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: _verificationMethod == 'email'
+                                  ? AppColors.primary
+                                  : const Color(0xFF2A2A2A),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.email_outlined,
+                                color: _verificationMethod == 'email'
+                                    ? AppColors.primary
+                                    : AppColors.textSecondary,
+                                size: 18,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Email',
+                                style: TextStyle(
+                                  color: _verificationMethod == 'email'
+                                      ? AppColors.primary
+                                      : AppColors.textSecondary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () {
+                          setSheetState(() {
+                            _verificationMethod = '2fa';
+                            _verificationCodeSent = true; // 2FA doesn't need sending
+                            _verificationCodeController.clear();
+                          });
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          decoration: BoxDecoration(
+                            color: _verificationMethod == '2fa'
+                                ? AppColors.primary.withOpacity(0.15)
+                                : const Color(0xFF1A1A1A),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: _verificationMethod == '2fa'
+                                  ? AppColors.primary
+                                  : const Color(0xFF2A2A2A),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.security,
+                                color: _verificationMethod == '2fa'
+                                    ? AppColors.primary
+                                    : AppColors.textSecondary,
+                                size: 18,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                '2FA',
+                                style: TextStyle(
+                                  color: _verificationMethod == '2fa'
+                                      ? AppColors.primary
+                                      : AppColors.textSecondary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+
+                // Code Input
+                if (_verificationMethod == 'email' && !_verificationCodeSent) ...[
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: ElevatedButton(
+                      onPressed: _isProcessing
+                          ? null
+                          : () {
+                              _sendVerificationCode();
+                              setSheetState(() {});
+                            },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.black,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      child: _isProcessing
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text(
+                              'Send Verification Code',
+                              style: TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                    ),
+                  ),
+                ] else ...[
+                  // Code entry
+                  Text(
+                    _verificationMethod == 'email'
+                        ? 'Enter the 6-digit code sent to your email'
+                        : 'Enter the 6-digit code from your authenticator app',
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 13,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1A1A1A),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFF2A2A2A)),
+                    ),
+                    child: TextField(
+                      controller: _verificationCodeController,
+                      keyboardType: TextInputType.number,
+                      textAlign: TextAlign.center,
+                      maxLength: 6,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 24,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 8,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: '000000',
+                        hintStyle: TextStyle(
+                          color: AppColors.textTertiary,
+                          fontSize: 24,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 8,
+                        ),
+                        border: InputBorder.none,
+                        counterText: '',
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 16,
+                        ),
+                      ),
+                      onChanged: (_) => setSheetState(() {}),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Resend button (only for email)
+                  if (_verificationMethod == 'email')
+                    GestureDetector(
+                      onTap: _resendCountdown > 0
+                          ? null
+                          : () {
+                              _sendVerificationCode();
+                              setSheetState(() {});
+                            },
+                      child: Text(
+                        _resendCountdown > 0
+                            ? 'Resend code in ${_resendCountdown}s'
+                            : 'Resend code',
+                        style: TextStyle(
+                          color: _resendCountdown > 0
+                              ? AppColors.textTertiary
+                              : AppColors.primary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 20),
+
+                  // Confirm button
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: ElevatedButton(
+                      onPressed: _verificationCodeController.text.length == 6 && !_isProcessing
+                          ? _completeWithdrawal
+                          : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _verificationCodeController.text.length == 6
+                            ? AppColors.primary
+                            : const Color(0xFF2A2A2A),
+                        foregroundColor: _verificationCodeController.text.length == 6
+                            ? Colors.black
+                            : AppColors.textTertiary,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      child: _isProcessing
+                          ? const SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
+                              ),
+                            )
+                          : const Text(
+                              'Confirm Withdrawal',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 16),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
