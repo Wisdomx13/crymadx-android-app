@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -29,7 +30,7 @@ class _AssetsScreenState extends State<AssetsScreen> {
   bool _hideBalance = false;
   List<dynamic> _recentTransactions = [];
   bool _loadingTransactions = false;
-  int _selectedAccountTab = 0; // 0 = All, 1 = Funding, 2 = Trading
+  int _selectedAccountTab = 0; // 0 = Funding, 1 = Trading
 
   @override
   void initState() {
@@ -44,53 +45,24 @@ class _AssetsScreenState extends State<AssetsScreen> {
   /// Get assets based on selected tab
   List<AssetBalance> _getFilteredAssets(BalanceProvider balanceProvider) {
     switch (_selectedAccountTab) {
-      case 1: // Funding
+      case 0: // Funding
         return balanceProvider.fundingAssets;
-      case 2: // Trading
+      case 1: // Trading
         return balanceProvider.tradingAssets;
-      default: // All (Combined)
-        return _getCombinedAssets(balanceProvider);
+      default:
+        return balanceProvider.fundingAssets;
     }
-  }
-
-  /// Combine funding and trading assets into a single list
-  List<AssetBalance> _getCombinedAssets(BalanceProvider balanceProvider) {
-    final Map<String, AssetBalance> combined = {};
-
-    // Add funding assets
-    for (final asset in balanceProvider.fundingAssets) {
-      combined[asset.symbol] = asset;
-    }
-
-    // Add/merge trading assets
-    for (final asset in balanceProvider.tradingAssets) {
-      if (combined.containsKey(asset.symbol)) {
-        // Combine amounts
-        final existing = combined[asset.symbol]!;
-        combined[asset.symbol] = AssetBalance(
-          symbol: asset.symbol,
-          name: asset.name,
-          amount: existing.amount + asset.amount,
-          price: asset.price, // Use same price
-          available: existing.available + asset.available,
-        );
-      } else {
-        combined[asset.symbol] = asset;
-      }
-    }
-
-    return combined.values.toList();
   }
 
   /// Get balance based on selected tab
   double _getDisplayBalance(BalanceProvider balanceProvider) {
     switch (_selectedAccountTab) {
-      case 1: // Funding
+      case 0: // Funding
         return balanceProvider.fundingAssets.fold(0.0, (sum, asset) => sum + (asset.amount * asset.price));
-      case 2: // Trading
+      case 1: // Trading
         return balanceProvider.tradingAssets.fold(0.0, (sum, asset) => sum + (asset.amount * asset.price));
-      default: // All (Total)
-        return balanceProvider.totalBalance;
+      default:
+        return balanceProvider.fundingAssets.fold(0.0, (sum, asset) => sum + (asset.amount * asset.price));
     }
   }
 
@@ -146,16 +118,49 @@ class _AssetsScreenState extends State<AssetsScreen> {
       backgroundColor: bgColor,
       appBar: AppBar(
         title: Text('Assets', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 18, color: textColor)),
-        backgroundColor: bgColor,
+        backgroundColor: isDark ? Colors.transparent : bgColor,
         elevation: 0,
         actions: [
-          IconButton(
-            icon: Icon(Icons.history, color: Colors.grey[isDark ? 400 : 600], size: 24),
-            onPressed: () => context.push(AppRoutes.transactionHistory),
-          ),
+          isDark
+              ? ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                    child: Container(
+                      width: 36,
+                      height: 36,
+                      margin: const EdgeInsets.only(right: 8),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.white.withOpacity(0.08),
+                            Colors.white.withOpacity(0.04),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.white.withOpacity(0.1)),
+                      ),
+                      child: IconButton(
+                        padding: EdgeInsets.zero,
+                        icon: Icon(Icons.history, color: Colors.grey[400], size: 20),
+                        onPressed: () => context.push(AppRoutes.transactionHistory),
+                      ),
+                    ),
+                  ),
+                )
+              : IconButton(
+                  icon: Icon(Icons.history, color: Colors.grey[600], size: 24),
+                  onPressed: () => context.push(AppRoutes.transactionHistory),
+                ),
         ],
       ),
-      body: Center(
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: BoxDecoration(
+          color: bgColor,
+        ),
+        child: Center(
         child: Container(
           width: contentWidth,
           child: SingleChildScrollView(
@@ -163,49 +168,138 @@ class _AssetsScreenState extends State<AssetsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Total Balance Section
+                // Total Balance Section - Glass Card
                 Consumer<CurrencyProvider>(
                   builder: (context, currency, _) {
-                    return Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: cardBgColor,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Text('Total Balance', style: TextStyle(color: isDark ? Colors.grey[500] : const Color(0xFF333333), fontSize: 14)),
-                              const SizedBox(width: 8),
-                              GestureDetector(
-                                onTap: () => setState(() => _hideBalance = !_hideBalance),
-                                child: Icon(
-                                  _hideBalance ? Icons.visibility_off : Icons.visibility,
-                                  color: isDark ? Colors.grey[500] : const Color(0xFF333333),
-                                  size: 18,
+                    return isDark
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child: BackdropFilter(
+                              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                              child: Container(
+                                padding: const EdgeInsets.all(20),
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [
+                                      Colors.black.withOpacity(0.6),
+                                      Colors.black.withOpacity(0.4),
+                                      Colors.black.withOpacity(0.7),
+                                    ],
+                                    stops: const [0.0, 0.5, 1.0],
+                                  ),
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: Colors.white.withOpacity(0.05),
+                                    width: 1.0,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.8),
+                                      blurRadius: 20,
+                                      offset: const Offset(0, 8),
+                                    ),
+                                  ],
+                                ),
+                                child: Stack(
+                                  children: [
+                                    // Top reflection
+                                    Positioned(
+                                      top: 0,
+                                      left: 30,
+                                      right: 30,
+                                      child: Container(
+                                        height: 1,
+                                        decoration: BoxDecoration(
+                                          gradient: LinearGradient(
+                                            colors: [
+                                              Colors.transparent,
+                                              Colors.white.withOpacity(0.2),
+                                              Colors.transparent,
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Text('Total Balance', style: TextStyle(color: Colors.grey[500], fontSize: 14)),
+                                            const SizedBox(width: 8),
+                                            GestureDetector(
+                                              onTap: () => setState(() => _hideBalance = !_hideBalance),
+                                              child: Icon(
+                                                _hideBalance ? Icons.visibility_off : Icons.visibility,
+                                                color: Colors.grey[500],
+                                                size: 18,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 12),
+                                        Text(
+                                          _hideBalance ? '****' : currency.formatAmount(displayBalance),
+                                          style: TextStyle(
+                                            color: textColor,
+                                            fontSize: 32,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          _hideBalance ? '≈ **** BTC' : '≈ ${(displayBalance / 91000).toStringAsFixed(4)} BTC',
+                                          style: TextStyle(color: Colors.grey[500], fontSize: 14),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
                                 ),
                               ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            _hideBalance ? '****' : currency.formatAmount(displayBalance),
-                            style: TextStyle(
-                              color: textColor,
-                              fontSize: 32,
-                              fontWeight: FontWeight.bold,
                             ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _hideBalance ? '≈ **** BTC' : '≈ ${(displayBalance / 91000).toStringAsFixed(4)} BTC',
-                            style: TextStyle(color: isDark ? Colors.grey[500] : const Color(0xFF333333), fontSize: 14),
-                          ),
-                        ],
-                      ),
-                    );
+                          )
+                        : Container(
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: cardBgColor,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Text('Total Balance', style: TextStyle(color: const Color(0xFF333333), fontSize: 14)),
+                                    const SizedBox(width: 8),
+                                    GestureDetector(
+                                      onTap: () => setState(() => _hideBalance = !_hideBalance),
+                                      child: Icon(
+                                        _hideBalance ? Icons.visibility_off : Icons.visibility,
+                                        color: const Color(0xFF333333),
+                                        size: 18,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                Text(
+                                  _hideBalance ? '****' : currency.formatAmount(displayBalance),
+                                  style: TextStyle(
+                                    color: textColor,
+                                    fontSize: 32,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  _hideBalance ? '≈ **** BTC' : '≈ ${(displayBalance / 91000).toStringAsFixed(4)} BTC',
+                                  style: TextStyle(color: const Color(0xFF333333), fontSize: 14),
+                                ),
+                              ],
+                            ),
+                          );
                   },
                 ),
 
@@ -260,25 +354,13 @@ class _AssetsScreenState extends State<AssetsScreen> {
 
                 const SizedBox(height: 16),
 
-                // Account Tabs
-                Container(
-                  decoration: BoxDecoration(
-                    color: cardBgColor,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: _buildAccountTab('All', 0, isDark),
-                      ),
-                      Expanded(
-                        child: _buildAccountTab('Funding', 1, isDark),
-                      ),
-                      Expanded(
-                        child: _buildAccountTab('Trading', 2, isDark),
-                      ),
-                    ],
-                  ),
+                // Account Tabs - Small squared glowing dark style
+                Row(
+                  children: [
+                    _buildAccountTab('Funding', 0, isDark),
+                    const SizedBox(width: 12),
+                    _buildAccountTab('Trading', 1, isDark),
+                  ],
                 ),
 
                 const SizedBox(height: 16),
@@ -388,6 +470,7 @@ class _AssetsScreenState extends State<AssetsScreen> {
           ),
         ),
       ),
+      ),
     );
       },
     );
@@ -438,22 +521,72 @@ class _AssetsScreenState extends State<AssetsScreen> {
     return GestureDetector(
       onTap: () => setState(() => _selectedAccountTab = index),
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
+        width: 140,
+        height: 56,
         decoration: BoxDecoration(
-          color: isSelected
-              ? AppColors.primary
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
+          // Black glassmorphism
+          gradient: isSelected
+              ? LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Colors.black.withOpacity(0.7),
+                    Colors.black.withOpacity(0.5),
+                  ],
+                )
+              : LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: isDark
+                      ? [
+                          Colors.black.withOpacity(0.3),
+                          Colors.black.withOpacity(0.2),
+                        ]
+                      : [
+                          Colors.white.withOpacity(0.9),
+                          Colors.white.withOpacity(0.7),
+                        ],
+                ),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected
+                ? Colors.white.withOpacity(0.2)
+                : (isDark ? Colors.white.withOpacity(0.08) : Colors.grey[300]!),
+            width: isSelected ? 2 : 1.5,
+          ),
+          boxShadow: [
+            // White glow for selected
+            if (isSelected)
+              BoxShadow(
+                color: Colors.white.withOpacity(0.15),
+                blurRadius: 12,
+                spreadRadius: 1,
+                offset: const Offset(0, 2),
+              ),
+            // Inner shadow for depth
+            BoxShadow(
+              color: Colors.black.withOpacity(isSelected ? 0.3 : 0.1),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            ),
+            // Highlight on top edge
+            BoxShadow(
+              color: Colors.white.withOpacity(isSelected ? 0.1 : 0.05),
+              blurRadius: 1,
+              offset: const Offset(0, -1),
+            ),
+          ],
         ),
         child: Center(
           child: Text(
             label,
             style: TextStyle(
               color: isSelected
-                  ? Colors.black
-                  : (isDark ? Colors.grey[400] : const Color(0xFF666666)),
-              fontSize: 14,
-              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                  ? Colors.white
+                  : (isDark ? Colors.white54 : const Color(0xFF444444)),
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.8,
             ),
           ),
         ),

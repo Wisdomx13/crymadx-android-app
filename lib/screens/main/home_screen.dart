@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -209,7 +210,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       backgroundColor: bgColor,
-      body: SafeArea(
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: BoxDecoration(
+          color: bgColor,
+        ),
+        child: SafeArea(
         bottom: false,
         child: Center(
           child: Container(
@@ -217,11 +224,11 @@ class _HomeScreenState extends State<HomeScreen> {
             margin: screenWidth > 500 ? const EdgeInsets.symmetric(horizontal: 12) : EdgeInsets.zero,
             decoration: screenWidth > 500
                 ? BoxDecoration(
-                    color: bgColor,
+                    color: isDark ? Colors.transparent : bgColor,
                     border: Border.all(color: isDark ? const Color(0xFF151515) : const Color(0xFFE0E0E0), width: 0.5),
                     borderRadius: BorderRadius.circular(16),
                   )
-                : BoxDecoration(color: bgColor),
+                : BoxDecoration(color: isDark ? Colors.transparent : bgColor),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(screenWidth > 500 ? 16 : 0),
               child: Stack(
@@ -252,6 +259,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
         ),
+      ),
       ),
     );
   }
@@ -324,7 +332,44 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildHeaderIcon(IconData icon, {VoidCallback? onTap, Key? key}) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return GestureDetector(key: key, onTap: onTap, child: Container(width: 36, height: 36, margin: const EdgeInsets.only(left: 6), child: Icon(icon, color: isDark ? Colors.white : Colors.black, size: 22)));
+    return GestureDetector(
+      key: key,
+      onTap: onTap,
+      child: isDark
+          ? ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                child: Container(
+                  width: 36,
+                  height: 36,
+                  margin: const EdgeInsets.only(left: 6),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Colors.white.withOpacity(0.08),
+                        Colors.white.withOpacity(0.04),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.1),
+                      width: 0.5,
+                    ),
+                  ),
+                  child: Icon(icon, color: Colors.white, size: 20),
+                ),
+              ),
+            )
+          : Container(
+              width: 36,
+              height: 36,
+              margin: const EdgeInsets.only(left: 6),
+              child: Icon(icon, color: Colors.black, size: 22),
+            ),
+    );
   }
 
   Widget _buildBalanceSection() {
@@ -335,8 +380,59 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (context, currency, balance, _) {
         final totalBalance = balance.totalBalance;
         return Container(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-          child: Column(
+          margin: const EdgeInsets.symmetric(horizontal: 12),
+          child: isDark
+              ? ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                    child: Container(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Colors.white.withOpacity(0.08),
+                            Colors.white.withOpacity(0.03),
+                            Colors.black.withOpacity(0.1),
+                          ],
+                          stops: const [0.0, 0.5, 1.0],
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.1),
+                          width: 0.5,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.3),
+                            blurRadius: 20,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Stack(
+                        children: [
+                          // Top reflection
+                          Positioned(
+                            top: 0,
+                            left: 30,
+                            right: 30,
+                            child: Container(
+                              height: 1,
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    Colors.transparent,
+                                    Colors.white.withOpacity(0.15),
+                                    Colors.transparent,
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
@@ -370,48 +466,86 @@ class _HomeScreenState extends State<HomeScreen> {
                       ],
                     ),
                   ),
-                  Row(
-                    children: [
-                      GestureDetector(
-                        onTap: () => context.push(AppRoutes.deposit),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(8)),
-                          child: const Text('Deposit', style: TextStyle(color: Colors.black, fontSize: 13, fontWeight: FontWeight.w600)),
+                  GestureDetector(
+                    onTap: () => context.push(AppRoutes.deposit),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [AppColors.primary, AppColors.primary700],
                         ),
+                        borderRadius: BorderRadius.circular(8),
+                        boxShadow: isDark
+                            ? [
+                                BoxShadow(
+                                  color: AppColors.primary.withOpacity(0.3),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 3),
+                                ),
+                              ]
+                            : null,
                       ),
-                      const SizedBox(width: 8),
-                      GestureDetector(
-                        onTap: () => context.push(AppRoutes.withdraw),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: isDark ? const Color(0xFF1A1A1A) : const Color(0xFFF0F0F0),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: isDark ? Colors.grey[800]! : Colors.grey[300]!, width: 1),
-                          ),
-                          child: Text('Withdraw', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      GestureDetector(
-                        onTap: () => context.push(AppRoutes.transfer),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: isDark ? const Color(0xFF1A1A1A) : const Color(0xFFF0F0F0),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: isDark ? Colors.grey[800]! : Colors.grey[300]!, width: 1),
-                          ),
-                          child: Text('Transfer', style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
-                        ),
-                      ),
-                    ],
+                      child: const Text('Deposit', style: TextStyle(color: Colors.black, fontSize: 13, fontWeight: FontWeight.w600)),
+                    ),
                   ),
                 ],
               ),
             ],
           ),
+                        ],
+                      ),
+                    ),
+                  ),
+                )
+              : Container(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text('Total Assets', style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w500)),
+                          const SizedBox(width: 6),
+                          GestureDetector(
+                            onTap: () => setState(() => _balanceVisible = !_balanceVisible),
+                            child: Icon(_balanceVisible ? Icons.visibility_outlined : Icons.visibility_off_outlined, color: subtextColor, size: 16),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text(_balanceVisible ? totalBalance.toStringAsFixed(2) : '******', style: TextStyle(color: textColor, fontSize: 28, fontWeight: FontWeight.w700, fontFamily: 'monospace')),
+                                    const SizedBox(width: 6),
+                                    Padding(padding: const EdgeInsets.only(bottom: 4), child: Row(children: [Text('USD', style: TextStyle(color: subtextColor, fontSize: 13, fontWeight: FontWeight.w500)), Icon(Icons.keyboard_arrow_down, color: subtextColor, size: 16)])),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                Row(children: [Text("Today's P&L", style: TextStyle(color: subtextColor, fontSize: 12, fontWeight: FontWeight.w500)), const SizedBox(width: 6), Text(_balanceVisible ? '0.00 USD(0%)' : '*** USD', style: TextStyle(color: AppColors.tradingBuy, fontSize: 12, fontWeight: FontWeight.w600)), Icon(Icons.keyboard_arrow_down, color: subtextColor, size: 14)]),
+                              ],
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: () => context.push(AppRoutes.deposit),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(8)),
+                              child: const Text('Deposit', style: TextStyle(color: Colors.black, fontSize: 13, fontWeight: FontWeight.w600)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
         );
       },
     );
@@ -501,11 +635,43 @@ class _HomeScreenState extends State<HomeScreen> {
     final subtextColor = isDark ? Colors.grey[600] : const Color(0xFF555555);
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF0D0D0D) : const Color(0xFFF8F8F8),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: isDark ? Colors.white.withOpacity(0.06) : Colors.black.withOpacity(0.08)),
-      ),
+      child: isDark
+          ? ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Colors.white.withOpacity(0.06),
+                        Colors.white.withOpacity(0.02),
+                        Colors.black.withOpacity(0.1),
+                      ],
+                      stops: const [0.0, 0.5, 1.0],
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.white.withOpacity(0.08)),
+                  ),
+                  child: _buildMarketContent(textColor, subtextColor, isDark),
+                ),
+              ),
+            )
+          : Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8F8F8),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.black.withOpacity(0.08)),
+              ),
+              child: _buildMarketContent(textColor, subtextColor, isDark),
+            ),
+    );
+  }
+
+  Widget _buildMarketContent(Color? textColor, Color? subtextColor, bool isDark) {
+    return Container(
       child: Column(
         children: [
           Container(
@@ -565,6 +731,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+
   Widget _buildNFTWidget() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textColor = isDark ? Colors.white : const Color(0xFF000000);
@@ -585,11 +752,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
-                        colors: [AppColors.primary.withOpacity(0.2), AppColors.primary.withOpacity(0.1)],
+                        colors: [Colors.white.withOpacity(0.1), Colors.white.withOpacity(0.05)],
                       ),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Icon(Icons.diamond_outlined, color: AppColors.primary, size: 20),
+                    child: Icon(Icons.diamond_outlined, color: Colors.white, size: 20),
                   ),
                   const SizedBox(width: 10),
                   Text('NFT Marketplace', style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w700)),
@@ -902,26 +1069,60 @@ class _QuickActionButton extends StatelessWidget {
       onTap: onTap,
       child: Column(
         children: [
-          Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: isDark ? Colors.white.withOpacity(0.08) : const Color(0xFF000000).withOpacity(0.12),
-                width: isDark ? 1 : 1.5,
-              ),
-              boxShadow: isDark ? null : [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.06),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
+          isDark
+              ? ClipRRect(
+                  borderRadius: BorderRadius.circular(26),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                    child: Container(
+                      width: 52,
+                      height: 52,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Colors.white.withOpacity(0.1),
+                            Colors.white.withOpacity(0.05),
+                          ],
+                        ),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.12),
+                          width: 0.5,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.3),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Icon(icon, color: Colors.white, size: 24),
+                    ),
+                  ),
+                )
+              : Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: const Color(0xFF000000).withOpacity(0.12),
+                      width: 1.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.06),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Icon(icon, color: const Color(0xFF000000), size: 24),
                 ),
-              ],
-            ),
-            child: Icon(icon, color: isDark ? Colors.white : const Color(0xFF000000), size: 24),
-          ),
           const SizedBox(height: 8),
           Text(label, style: TextStyle(color: isDark ? Colors.grey[400] : const Color(0xFF000000), fontSize: 11, fontWeight: FontWeight.w600)),
         ],
@@ -1091,106 +1292,146 @@ class _NFTCard extends StatelessWidget {
 
     return GestureDetector(
       onTap: onTap,
-      child: Container(
+      child: isDark
+          ? ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                child: Container(
+                  width: 160,
+                  margin: const EdgeInsets.only(right: 12),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Colors.white.withOpacity(0.08),
+                        Colors.white.withOpacity(0.03),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.1),
+                      width: 0.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.3),
+                        blurRadius: 15,
+                        offset: const Offset(0, 5),
+                      ),
+                    ],
+                  ),
+                  child: _buildNFTCardContent(textColor, subtextColor),
+                ),
+              ),
+            )
+          : Container(
         width: 160,
         margin: const EdgeInsets.only(right: 12),
         decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF0D0D0D) : Colors.white,
+          color: Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.08),
+            color: Colors.black.withOpacity(0.08),
           ),
           boxShadow: [
             BoxShadow(
-              color: isDark ? Colors.black.withOpacity(0.3) : Colors.black.withOpacity(0.08),
+              color: Colors.black.withOpacity(0.08),
               blurRadius: 12,
               offset: const Offset(0, 4),
             ),
           ],
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // NFT Image
-            ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
-              child: Container(
-                height: 120,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      AppColors.primary.withOpacity(0.3),
-                      AppColors.secondary.withOpacity(0.3),
-                    ],
-                  ),
+        child: _buildNFTCardContent(textColor, subtextColor),
+      ),
+    );
+  }
+
+  Widget _buildNFTCardContent(Color? textColor, Color? subtextColor) {
+    return Container(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // NFT Image
+          ClipRRect(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
+            child: Container(
+              height: 120,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppColors.primary.withOpacity(0.3),
+                    AppColors.secondary.withOpacity(0.3),
+                  ],
                 ),
-                child: nft.nft.imageUrl.isNotEmpty
-                    ? Image.network(
-                        nft.nft.imageUrl,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Center(
-                          child: Icon(Icons.diamond, color: AppColors.primary, size: 40),
-                        ),
-                      )
-                    : Center(
+              ),
+              child: nft.nft.imageUrl.isNotEmpty
+                  ? Image.network(
+                      nft.nft.imageUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Center(
                         child: Icon(Icons.diamond, color: AppColors.primary, size: 40),
                       ),
-              ),
+                    )
+                  : Center(
+                      child: Icon(Icons.diamond, color: AppColors.primary, size: 40),
+                    ),
             ),
-            // NFT Info
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    nft.nft.name,
-                    style: TextStyle(
-                      color: textColor,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+          ),
+          // NFT Info
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  nft.nft.name,
+                  style: TextStyle(
+                    color: textColor,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    nft.nft.collectionName,
-                    style: TextStyle(
-                      color: subtextColor,
-                      fontSize: 11,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  nft.nft.collectionName,
+                  style: TextStyle(
+                    color: subtextColor,
+                    fontSize: 11,
                   ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          '${nft.price?.toStringAsFixed(2) ?? '0.00'} ${nft.currency}',
-                          style: TextStyle(
-                            color: AppColors.primary,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                          ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        '${nft.price?.toStringAsFixed(2) ?? '0.00'} ${nft.currency}',
+                        style: TextStyle(
+                          color: AppColors.primary,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                    ],
-                  ),
-                ],
-              ),
+                    ),
+                  ],
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

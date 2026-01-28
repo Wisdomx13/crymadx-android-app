@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'dart:async';
@@ -32,6 +33,15 @@ class _MarketsScreenState extends State<MarketsScreen> {
   final List<String> _marketTabs = ['Favorites', 'Hot', 'New', 'Gainers', 'Losers', 'Turnover'];
   Set<String> _favorites = {'BTC', 'ETH', 'SOL'};
 
+  // Performance optimization - Throttling
+  DateTime? _lastUpdate;
+  final Duration _updateThrottle = const Duration(milliseconds: 500);
+
+  // Performance optimization - Memoization
+  final Map<String, List<CryptoTicker>> _filteredCache = {};
+  String _lastSearchQuery = '';
+  int _lastSelectedTab = -1;
+
   @override
   void initState() {
     super.initState();
@@ -61,29 +71,46 @@ class _MarketsScreenState extends State<MarketsScreen> {
     setState(() => _isLive = true);
   }
 
-  /// Update ticker data from WebSocket
+  /// Update ticker data from WebSocket with throttling
   void _updateTickerData(TickerData data) {
+    // Throttle updates to 500ms intervals
+    final now = DateTime.now();
+    if (_lastUpdate != null && now.difference(_lastUpdate!) < _updateThrottle) {
+      return; // Skip update if within throttle window
+    }
+    _lastUpdate = now;
+
     final index = _allCryptos.indexWhere((c) => c.symbol == data.symbol);
     if (index != -1) {
-      setState(() {
-        _allCryptos[index] = CryptoTicker(
-          symbol: data.symbol,
-          baseAsset: data.symbol.replaceAll('USDT', ''),
-          price: data.lastPrice,
-          change24h: data.priceChangePercent,
-          high24h: data.highPrice,
-          low24h: data.lowPrice,
-          volume: data.volume,
-          quoteVolume: data.quoteVolume,
-        );
-        _updateDisplayCryptos();
-      });
+      // Update data without setState first
+      _allCryptos[index] = CryptoTicker(
+        symbol: data.symbol,
+        baseAsset: data.symbol.replaceAll('USDT', ''),
+        price: data.lastPrice,
+        change24h: data.priceChangePercent,
+        high24h: data.highPrice,
+        low24h: data.lowPrice,
+        volume: data.volume,
+        quoteVolume: data.quoteVolume,
+      );
+
+      // Only update UI if symbol is currently visible
+      if (_shouldUpdateDisplay(data.symbol)) {
+        setState(() {
+          _updateDisplayCryptos();
+        });
+      }
     }
+  }
+
+  /// Check if symbol is in current filtered view
+  bool _shouldUpdateDisplay(String symbol) {
+    return _displayCryptos.any((c) => c.symbol == symbol);
   }
 
   Future<void> _loadCryptoData() async {
     try {
-      final cryptos = await _cryptoService.getTopCryptos(limit: 100);
+      final cryptos = await _cryptoService.getTopCryptos(limit: 50);
       if (mounted) {
         setState(() {
           _allCryptos = cryptos;
@@ -97,14 +124,24 @@ class _MarketsScreenState extends State<MarketsScreen> {
   }
 
   void _updateDisplayCryptos() {
+    final currentSearchQuery = _searchController.text.toLowerCase();
+    final cacheKey = '$_selectedMarketTab:$currentSearchQuery';
+
+    // Return cached result if nothing changed
+    if (_lastSearchQuery == currentSearchQuery &&
+        _lastSelectedTab == _selectedMarketTab &&
+        _filteredCache.containsKey(cacheKey)) {
+      _displayCryptos = _filteredCache[cacheKey]!;
+      return;
+    }
+
     List<CryptoTicker> result = List.from(_allCryptos);
 
     // Apply search filter if searching
-    if (_searchController.text.isNotEmpty) {
-      final query = _searchController.text.toLowerCase();
+    if (currentSearchQuery.isNotEmpty) {
       result = result.where((c) =>
-        c.baseAsset.toLowerCase().contains(query) ||
-        c.name.toLowerCase().contains(query)
+        c.baseAsset.toLowerCase().contains(currentSearchQuery) ||
+        c.name.toLowerCase().contains(currentSearchQuery)
       ).toList();
     } else {
       // Apply tab filter
@@ -131,6 +168,13 @@ class _MarketsScreenState extends State<MarketsScreen> {
       }
     }
 
+    // Limit to top 50 for display (reduce render load)
+    result = result.take(50).toList();
+
+    // Cache the result
+    _filteredCache[cacheKey] = result;
+    _lastSearchQuery = currentSearchQuery;
+    _lastSelectedTab = _selectedMarketTab;
     _displayCryptos = result;
   }
 
@@ -163,36 +207,109 @@ class _MarketsScreenState extends State<MarketsScreen> {
       backgroundColor: bgColor,
       appBar: AppBar(
         title: _showSearch
-            ? TextField(
-                controller: _searchController,
-                autofocus: true,
-                style: TextStyle(color: textColor),
-                decoration: InputDecoration(
-                  hintText: 'Search markets...',
-                  hintStyle: TextStyle(color: Colors.grey[600]),
-                  border: InputBorder.none,
-                ),
-                onChanged: (v) => setState(() => _updateDisplayCryptos()),
-              )
+            ? isDark
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                      child: Container(
+                        height: 40,
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              Colors.white.withOpacity(0.08),
+                              Colors.white.withOpacity(0.04),
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.white.withOpacity(0.1)),
+                        ),
+                        child: TextField(
+                          controller: _searchController,
+                          autofocus: true,
+                          style: TextStyle(color: textColor),
+                          decoration: InputDecoration(
+                            hintText: 'Search markets...',
+                            hintStyle: TextStyle(color: Colors.grey[600]),
+                            border: InputBorder.none,
+                          ),
+                          onChanged: (v) => setState(() => _updateDisplayCryptos()),
+                        ),
+                      ),
+                    ),
+                  )
+                : TextField(
+                    controller: _searchController,
+                    autofocus: true,
+                    style: TextStyle(color: textColor),
+                    decoration: InputDecoration(
+                      hintText: 'Search markets...',
+                      hintStyle: TextStyle(color: Colors.grey[600]),
+                      border: InputBorder.none,
+                    ),
+                    onChanged: (v) => setState(() => _updateDisplayCryptos()),
+                  )
             : Text('Markets', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w600)),
-        backgroundColor: bgColor,
+        backgroundColor: isDark ? Colors.transparent : bgColor,
         elevation: 0,
         actions: [
-          IconButton(
-            icon: Icon(_showSearch ? Icons.close : Icons.search, color: textColor),
-            onPressed: () {
-              setState(() {
-                _showSearch = !_showSearch;
-                if (!_showSearch) {
-                  _searchController.clear();
-                  _updateDisplayCryptos();
-                }
-              });
-            },
-          ),
+          isDark
+              ? ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                    child: Container(
+                      width: 36,
+                      height: 36,
+                      margin: const EdgeInsets.only(right: 8),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.white.withOpacity(0.08),
+                            Colors.white.withOpacity(0.04),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.white.withOpacity(0.1)),
+                      ),
+                      child: IconButton(
+                        padding: EdgeInsets.zero,
+                        icon: Icon(_showSearch ? Icons.close : Icons.search, color: textColor, size: 20),
+                        onPressed: () {
+                          setState(() {
+                            _showSearch = !_showSearch;
+                            if (!_showSearch) {
+                              _searchController.clear();
+                              _updateDisplayCryptos();
+                            }
+                          });
+                        },
+                      ),
+                    ),
+                  ),
+                )
+              : IconButton(
+                  icon: Icon(_showSearch ? Icons.close : Icons.search, color: textColor),
+                  onPressed: () {
+                    setState(() {
+                      _showSearch = !_showSearch;
+                      if (!_showSearch) {
+                        _searchController.clear();
+                        _updateDisplayCryptos();
+                      }
+                    });
+                  },
+                ),
         ],
       ),
-      body: Center(
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: BoxDecoration(
+          color: bgColor,
+        ),
+        child: Center(
         child: Container(
           width: contentWidth,
           margin: screenWidth > 500 ? const EdgeInsets.symmetric(horizontal: 12) : EdgeInsets.zero,
@@ -244,6 +361,7 @@ class _MarketsScreenState extends State<MarketsScreen> {
           ),
         ),
       ),
+      ),
     );
   }
 
@@ -261,26 +379,61 @@ class _MarketsScreenState extends State<MarketsScreen> {
               _selectedMarketTab = i;
               _updateDisplayCryptos();
             }),
-            child: Container(
-              margin: const EdgeInsets.only(right: 20),
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              decoration: BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(
-                    color: _selectedMarketTab == i ? AppColors.primary : Colors.transparent,
-                    width: 2,
+            child: isDark && _selectedMarketTab == i
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+                      child: Container(
+                        margin: const EdgeInsets.only(right: 12),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              Colors.white.withOpacity(0.15),
+                              Colors.white.withOpacity(0.08),
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.white.withOpacity(0.2)),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.white.withOpacity(0.1),
+                              blurRadius: 8,
+                            ),
+                          ],
+                        ),
+                        child: Text(
+                          _marketTabs[i],
+                          style: TextStyle(
+                            color: textColor,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                  )
+                : Container(
+                    margin: const EdgeInsets.only(right: 20),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(
+                          color: _selectedMarketTab == i ? AppColors.primary : Colors.transparent,
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                    child: Text(
+                      _marketTabs[i],
+                      style: TextStyle(
+                        color: _selectedMarketTab == i ? textColor : subtextColor,
+                        fontSize: 14,
+                        fontWeight: _selectedMarketTab == i ? FontWeight.w700 : FontWeight.w500,
+                      ),
+                    ),
                   ),
-                ),
-              ),
-              child: Text(
-                _marketTabs[i],
-                style: TextStyle(
-                  color: _selectedMarketTab == i ? textColor : subtextColor,
-                  fontSize: 14,
-                  fontWeight: _selectedMarketTab == i ? FontWeight.w700 : FontWeight.w500,
-                ),
-              ),
-            ),
           )),
         ),
       ),
@@ -295,17 +448,41 @@ class _MarketsScreenState extends State<MarketsScreen> {
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
       child: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Text(
-              'Spot',
-              style: TextStyle(color: textColor, fontSize: 12, fontWeight: FontWeight.w600),
-            ),
-          ),
+          isDark
+              ? ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.white.withOpacity(0.12),
+                            Colors.white.withOpacity(0.06),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.white.withOpacity(0.1)),
+                      ),
+                      child: Text(
+                        'Spot',
+                        style: TextStyle(color: textColor, fontSize: 12, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ),
+                )
+              : Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Text(
+                    'Spot',
+                    style: TextStyle(color: textColor, fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                ),
           const SizedBox(width: 8),
           // Live indicator
           if (_isLive)

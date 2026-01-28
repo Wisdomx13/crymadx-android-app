@@ -44,60 +44,93 @@ class MainScreen extends StatelessWidget {
     return Scaffold(
       body: child,
       extendBody: true,
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          border: Border(
-            top: BorderSide(
-              color: isDark ? AppColors.glassBorder : AppColors.lightGlassBorder,
-              width: 0.5,
-            ),
-          ),
-        ),
-        child: ClipRRect(
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-            child: Container(
-              color: isDark
-                  ? Colors.black.withOpacity(0.9)
-                  : Colors.white.withOpacity(0.95),
-              child: SafeArea(
-                child: SizedBox(
-                  height: 65,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      _NavItem(
-                        icon: Icons.home_outlined,
-                        activeIcon: Icons.home,
-                        label: 'Home',
-                        isSelected: selectedIndex == 0,
-                        onTap: () => _onItemTapped(context, 0),
-                      ),
-                      _NavItem(
-                        icon: Icons.show_chart_outlined,
-                        activeIcon: Icons.show_chart,
-                        label: 'Markets',
-                        isSelected: selectedIndex == 1,
-                        onTap: () => _onItemTapped(context, 1),
-                      ),
-                      _NavItem(
-                        icon: Icons.swap_horiz,
-                        activeIcon: Icons.swap_horiz,
-                        label: 'Trade',
-                        isSelected: selectedIndex == 2,
-                        onTap: () => _onItemTapped(context, 2),
-                      ),
-                      _NavItem(
-                        icon: Icons.account_balance_wallet_outlined,
-                        activeIcon: Icons.account_balance_wallet,
-                        label: 'Assets',
-                        isSelected: selectedIndex == 3,
-                        onTap: () => _onItemTapped(context, 3),
-                      ),
-                    ],
-                  ),
+      bottomNavigationBar: ClipRRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: isDark
+                  ? LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.black.withOpacity(0.7),
+                        Colors.black.withOpacity(0.85),
+                        Colors.black.withOpacity(0.95),
+                      ],
+                      stops: const [0.0, 0.5, 1.0],
+                    )
+                  : null,
+              color: isDark ? null : Colors.white.withOpacity(0.95),
+              border: Border(
+                top: BorderSide(
+                  color: isDark
+                      ? Colors.white.withOpacity(0.08)
+                      : AppColors.lightGlassBorder,
+                  width: 0.5,
                 ),
               ),
+            ),
+            child: Stack(
+              children: [
+                // Top reflection line (dark mode only)
+                if (isDark)
+                  Positioned(
+                    top: 0,
+                    left: 40,
+                    right: 40,
+                    child: Container(
+                      height: 1,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.transparent,
+                            Colors.white.withOpacity(0.1),
+                            Colors.transparent,
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                SafeArea(
+                  child: SizedBox(
+                    height: 65,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _NavItem(
+                          icon: Icons.home_outlined,
+                          activeIcon: Icons.home,
+                          label: 'Home',
+                          isSelected: selectedIndex == 0,
+                          onTap: () => _onItemTapped(context, 0),
+                        ),
+                        _NavItem(
+                          icon: Icons.show_chart_outlined,
+                          activeIcon: Icons.show_chart,
+                          label: 'Markets',
+                          isSelected: selectedIndex == 1,
+                          onTap: () => _onItemTapped(context, 1),
+                        ),
+                        _NavItem(
+                          icon: Icons.swap_horiz,
+                          activeIcon: Icons.swap_horiz,
+                          label: 'Trade',
+                          isSelected: selectedIndex == 2,
+                          onTap: () => _onItemTapped(context, 2),
+                        ),
+                        _NavItem(
+                          icon: Icons.account_balance_wallet_outlined,
+                          activeIcon: Icons.account_balance_wallet,
+                          label: 'Assets',
+                          isSelected: selectedIndex == 3,
+                          onTap: () => _onItemTapped(context, 3),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -125,7 +158,7 @@ class _NavItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    final selectedColor = isDark ? AppColors.textPrimary : AppColors.lightTextPrimary;
+    final selectedColor = isDark ? Colors.white : AppColors.lightTextPrimary;
     final unselectedColor = isDark ? AppColors.textMuted : AppColors.lightTextMuted;
 
     return GestureDetector(
@@ -136,17 +169,47 @@ class _NavItem extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              isSelected ? activeIcon : icon,
-              size: 24,
-              color: isSelected ? selectedColor : unselectedColor,
-            ),
+            // Icon with glass container when selected (pure white glow, no green)
+            isDark && isSelected
+                ? Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.white.withOpacity(0.15),
+                          Colors.white.withOpacity(0.08),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.2),
+                        width: 0.5,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.white.withOpacity(0.1),
+                          blurRadius: 10,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Icon(
+                      activeIcon,
+                      size: 22,
+                      color: selectedColor,
+                    ),
+                  )
+                : Icon(
+                    isSelected ? activeIcon : icon,
+                    size: 24,
+                    color: isSelected ? selectedColor : unselectedColor,
+                  ),
             const SizedBox(height: 4),
             Text(
               label,
               style: TextStyle(
                 fontSize: 11,
-                fontWeight: FontWeight.w500,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
                 color: isSelected ? selectedColor : unselectedColor,
               ),
             ),

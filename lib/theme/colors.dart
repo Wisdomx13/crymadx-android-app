@@ -68,6 +68,34 @@ class AppColors {
   static const Color glassReflection = Color(0x08FFFFFF);
   static const Color glossyBlack = Color(0xFF000000);
 
+  // Tempered Glass Effects - 3D Depth
+  static const Color temperedSurface = Color(0xE6141A1E);      // 90% opacity dark
+  static const Color temperedBorder = Color(0x1FFFFFFF);       // 12% white
+  static const Color temperedHighlight = Color(0x19FFFFFF);    // 10% white top edge
+  static const Color temperedShadow = Color(0x4D000000);       // 30% black bottom edge
+  static const Color temperedInner = Color(0x0DFFFFFF);        // 5% white inner glow
+
+  // Liquid Dark Glass - Smooth Liquid Feel
+  static const Color liquidDark = Color(0xE6050A0F);           // 90% opacity
+  static const Color liquidDarkLight = Color(0xCC0A0F14);      // 80% opacity
+  static const Color liquidGradientStart = Color(0xB3000000);  // 70% black
+  static const Color liquidGradientEnd = Color(0xE6000000);    // 90% black
+  static const Color liquidReflection = Color(0x14FFFFFF);     // 8% white reflection
+
+  // Premium Luxury Glass - Green Tinted
+  static const Color premiumSurface = Color(0xE6001A10);       // Dark green tint
+  static const Color premiumGlow = Color(0x3300E676);          // 20% green glow
+  static const Color premiumBorder = Color(0x4000E676);        // 25% green border
+  static const Color premiumHighlight = Color(0x2600E676);     // 15% green highlight
+  static const Color premiumInner = Color(0x1A00E676);         // 10% green inner
+
+  // Circuit Animation Colors
+  static const Color circuitGlow = Color(0xFF00E676);          // Bright green
+  static const Color circuitPath = Color(0xCC00E676);          // 80% green for paths
+  static const Color circuitNode = Color(0x4D00E676);          // 30% green for nodes
+  static const Color circuitPulse = Color(0xFF00FF88);         // Bright pulse color
+  static const Color circuitFade = Color(0x1A00E676);          // 10% for fade effect
+
   // ============ LIGHT THEME COLORS ============
 
   // Background - Clean Light Theme

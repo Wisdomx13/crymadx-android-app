@@ -1,11 +1,13 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../theme/colors.dart';
 import '../../navigation/app_router.dart';
 import '../../providers/auth_provider.dart';
+import '../../widgets/glass_input.dart';
 
-/// Register Screen - Sleek dark design matching login
+/// Register Screen - Premium glassmorphism design
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
 
@@ -20,8 +22,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _confirmPasswordController = TextEditingController();
   final _referralController = TextEditingController();
   bool _agreeToTerms = false;
-  bool _obscurePassword = true;
-  bool _obscureConfirmPassword = true;
 
   @override
   void dispose() {
@@ -176,364 +176,381 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
-  Widget _buildSleekInput({
-    required String hint,
-    required IconData icon,
-    TextEditingController? controller,
-    bool obscureText = false,
-    bool showPasswordToggle = false,
-    VoidCallback? onTogglePassword,
-    bool obscureValue = true,
-    TextInputType? keyboardType,
-  }) {
-    return Container(
-      height: 48,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF0D0D0D),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: Colors.grey[600], size: 20),
-          const SizedBox(width: 12),
-          Expanded(
-            child: TextField(
-              controller: controller,
-              obscureText: obscureText && obscureValue,
-              keyboardType: keyboardType,
-              cursorColor: AppColors.primary,
-              style: const TextStyle(color: Colors.white, fontSize: 15),
-              decoration: InputDecoration(
-                hintText: hint,
-                hintStyle: TextStyle(color: Colors.grey[700], fontSize: 15),
-                border: InputBorder.none,
-                enabledBorder: InputBorder.none,
-                focusedBorder: InputBorder.none,
-                contentPadding: EdgeInsets.zero,
-                isDense: true,
-              ),
-            ),
-          ),
-          if (showPasswordToggle)
-            GestureDetector(
-              onTap: onTogglePassword,
-              child: Icon(
-                obscureValue ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                color: Colors.grey[600],
-                size: 20,
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
     final contentWidth = screenWidth > 400 ? 340.0 : screenWidth - 48;
 
     return Scaffold(
       backgroundColor: Colors.black,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Column(
-              children: [
-                const SizedBox(height: 40),
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          color: Colors.black,
+        ),
+        child: SafeArea(
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Column(
+                children: [
+                  const SizedBox(height: 20),
 
-                // Back button and title
-                Row(
-                  children: [
-                    GestureDetector(
-                      onTap: () => context.go(AppRoutes.login),
-                      child: Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF0D0D0D),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(
-                          Icons.arrow_back,
-                          color: Colors.grey[400],
-                          size: 20,
+                  // Glass back button
+                  Row(
+                    children: [
+                      GestureDetector(
+                        onTap: () => context.go(AppRoutes.login),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: BackdropFilter(
+                            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                            child: Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    Colors.white.withOpacity(0.1),
+                                    Colors.white.withOpacity(0.05),
+                                  ],
+                                ),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: Colors.white.withOpacity(0.1),
+                                  width: 1,
+                                ),
+                              ),
+                              child: Icon(
+                                Icons.arrow_back,
+                                color: Colors.grey[400],
+                                size: 20,
+                              ),
+                            ),
+                          ),
                         ),
                       ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // Glass Logo
+                  _buildGlassLogo(),
+
+                  const SizedBox(height: 16),
+
+                  // Title
+                  const Text(
+                    'Create Account',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Start your crypto journey today',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[500],
+                    ),
+                  ),
 
-                const SizedBox(height: 24),
+                  const SizedBox(height: 24),
 
-                // Logo
-                Image.asset(
-                  'assets/images/logo.png',
-                  width: 56,
-                  height: 56,
-                  fit: BoxFit.contain,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Container(
-                      width: 56,
-                      height: 56,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: AppColors.gradientPrimary,
+                  // Glass Form Card
+                  _buildGlassFormCard(contentWidth),
+
+                  const SizedBox(height: 20),
+
+                  // Login Link
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        'Already have an account? ',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey[500],
                         ),
-                        borderRadius: BorderRadius.circular(14),
                       ),
-                      child: const Center(
+                      GestureDetector(
+                        onTap: () => context.go(AppRoutes.login),
                         child: Text(
-                          'C',
+                          'Sign In',
                           style: TextStyle(
-                            fontSize: 28,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.black,
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-
-                const SizedBox(height: 16),
-
-                // Title
-                const Text(
-                  'Create Account',
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Start your crypto journey today',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.grey[500],
-                  ),
-                ),
-
-                const SizedBox(height: 24),
-
-                // Full Name field
-                Container(
-                  width: contentWidth,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Full Name',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.grey[400],
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      _buildSleekInput(
-                        hint: 'Enter your name',
-                        icon: Icons.person_outlined,
-                        controller: _nameController,
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 12),
-
-                // Email field
-                Container(
-                  width: contentWidth,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Email',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.grey[400],
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      _buildSleekInput(
-                        hint: 'Enter your email',
-                        icon: Icons.email_outlined,
-                        controller: _emailController,
-                        keyboardType: TextInputType.emailAddress,
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 12),
-
-                // Password field
-                Container(
-                  width: contentWidth,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Password',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.grey[400],
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      _buildSleekInput(
-                        hint: 'Create a password',
-                        icon: Icons.lock_outlined,
-                        controller: _passwordController,
-                        obscureText: true,
-                        showPasswordToggle: true,
-                        obscureValue: _obscurePassword,
-                        onTogglePassword: () => setState(() => _obscurePassword = !_obscurePassword),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 12),
-
-                // Confirm Password field
-                Container(
-                  width: contentWidth,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Confirm Password',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.grey[400],
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      _buildSleekInput(
-                        hint: 'Confirm your password',
-                        icon: Icons.lock_outlined,
-                        controller: _confirmPasswordController,
-                        obscureText: true,
-                        showPasswordToggle: true,
-                        obscureValue: _obscureConfirmPassword,
-                        onTogglePassword: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 12),
-
-                // Referral Code field
-                Container(
-                  width: contentWidth,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Referral Code (Optional)',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.grey[400],
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      _buildSleekInput(
-                        hint: 'Enter referral code',
-                        icon: Icons.card_giftcard_outlined,
-                        controller: _referralController,
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-
-                // Terms checkbox
-                Container(
-                  width: contentWidth,
-                  child: Row(
-                    children: [
-                      SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: Checkbox(
-                          value: _agreeToTerms,
-                          onChanged: (v) => setState(() => _agreeToTerms = v!),
-                          activeColor: AppColors.primary,
-                          side: BorderSide(color: Colors.grey[700]!),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(3),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text.rich(
-                          TextSpan(
-                            text: 'I agree to the ',
-                            style: TextStyle(fontSize: 11, color: Colors.grey[500]),
-                            children: [
-                              TextSpan(
-                                text: 'Terms',
-                                style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w500),
-                              ),
-                              const TextSpan(text: ' and '),
-                              TextSpan(
-                                text: 'Privacy Policy',
-                                style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w500),
-                              ),
-                            ],
+                            fontSize: 13,
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),
                     ],
                   ),
-                ),
 
-                const SizedBox(height: 20),
+                  const SizedBox(height: 32),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
-                // Create Account Button
-                GestureDetector(
-                  onTap: _agreeToTerms ? _handleRegister : null,
+  Widget _buildGlassLogo() {
+    return Container(
+      width: 70,
+      height: 70,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withOpacity(0.25),
+            blurRadius: 30,
+            spreadRadius: 5,
+          ),
+          BoxShadow(
+            color: Colors.black.withOpacity(0.5),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Colors.white.withOpacity(0.15),
+                  Colors.white.withOpacity(0.05),
+                  Colors.black.withOpacity(0.1),
+                ],
+                stops: const [0.0, 0.5, 1.0],
+              ),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.2),
+                width: 1.5,
+              ),
+            ),
+            child: Stack(
+              children: [
+                // Top reflection
+                Positioned(
+                  top: 0,
+                  left: 12,
+                  right: 12,
                   child: Container(
-                    width: contentWidth,
-                    height: 44,
+                    height: 1,
                     decoration: BoxDecoration(
-                      color: _agreeToTerms ? AppColors.primary : AppColors.primary.withOpacity(0.4),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Center(
-                      child: Text(
-                        'Create Account',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.transparent,
+                          Colors.white.withOpacity(0.4),
+                          Colors.transparent,
+                        ],
                       ),
                     ),
                   ),
                 ),
+                // Logo
+                Center(
+                  child: Image.asset(
+                    'assets/images/logo.png',
+                    width: 45,
+                    height: 45,
+                    fit: BoxFit.contain,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        width: 45,
+                        height: 45,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              AppColors.primary,
+                              AppColors.primary700,
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Center(
+                          child: Text(
+                            'C',
+                            style: TextStyle(
+                              fontSize: 26,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.black,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
-                const SizedBox(height: 16),
+  Widget _buildGlassFormCard(double contentWidth) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+        child: Container(
+          width: contentWidth + 32,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Colors.white.withOpacity(0.08),
+                Colors.white.withOpacity(0.03),
+                Colors.black.withOpacity(0.1),
+              ],
+              stops: const [0.0, 0.5, 1.0],
+            ),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.1),
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.3),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Stack(
+            children: [
+              // Top reflection line
+              Positioned(
+                top: 0,
+                left: 30,
+                right: 30,
+                child: Container(
+                  height: 1,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.transparent,
+                        Colors.white.withOpacity(0.15),
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              // Form content
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Full Name field
+                  GlassInput(
+                    label: 'Full Name',
+                    hint: 'Enter your name',
+                    prefixIcon: Icons.person_outlined,
+                    controller: _nameController,
+                  ),
 
-                // Divider
-                Container(
-                  width: contentWidth,
-                  child: Row(
+                  const SizedBox(height: 14),
+
+                  // Email field
+                  GlassInput(
+                    label: 'Email',
+                    hint: 'Enter your email',
+                    prefixIcon: Icons.email_outlined,
+                    controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  // Password field
+                  GlassInput(
+                    label: 'Password',
+                    hint: 'Create a password',
+                    prefixIcon: Icons.lock_outlined,
+                    controller: _passwordController,
+                    obscureText: true,
+                    showPasswordToggle: true,
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  // Confirm Password field
+                  GlassInput(
+                    label: 'Confirm Password',
+                    hint: 'Confirm your password',
+                    prefixIcon: Icons.lock_outlined,
+                    controller: _confirmPasswordController,
+                    obscureText: true,
+                    showPasswordToggle: true,
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  // Referral Code field
+                  GlassInput(
+                    label: 'Referral Code (Optional)',
+                    hint: 'Enter referral code',
+                    prefixIcon: Icons.card_giftcard_outlined,
+                    controller: _referralController,
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Terms checkbox with glass styling
+                  _buildGlassCheckbox(),
+
+                  const SizedBox(height: 20),
+
+                  // Create Account Button
+                  _buildGlassButton(
+                    label: 'Create Account',
+                    onTap: _agreeToTerms ? _handleRegister : null,
+                    isPrimary: true,
+                    isEnabled: _agreeToTerms,
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Divider
+                  Row(
                     children: [
-                      Expanded(child: Divider(color: Colors.grey[800], thickness: 0.5)),
+                      Expanded(
+                        child: Container(
+                          height: 1,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                Colors.transparent,
+                                Colors.white.withOpacity(0.1),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 12),
                         child: Text(
@@ -544,73 +561,198 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           ),
                         ),
                       ),
-                      Expanded(child: Divider(color: Colors.grey[800], thickness: 0.5)),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-
-                // Google Sign Up Button
-                GestureDetector(
-                  onTap: _handleGoogleSignUp,
-                  child: Container(
-                    width: contentWidth,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        // Google Logo - simple G
-                        _GoogleLogoSimple(),
-                        SizedBox(width: 10),
-                        Text(
-                          'Continue with Google',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF1F1F1F),
+                      Expanded(
+                        child: Container(
+                          height: 1,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                Colors.white.withOpacity(0.1),
+                                Colors.transparent,
+                              ],
+                            ),
                           ),
                         ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Google Sign Up Button
+                  _buildGlassButton(
+                    label: 'Continue with Google',
+                    onTap: _handleGoogleSignUp,
+                    isPrimary: false,
+                    icon: const _GoogleLogoSimple(),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGlassCheckbox() {
+    return Row(
+      children: [
+        GestureDetector(
+          onTap: () => setState(() => _agreeToTerms = !_agreeToTerms),
+          child: Container(
+            width: 20,
+            height: 20,
+            decoration: BoxDecoration(
+              gradient: _agreeToTerms
+                  ? LinearGradient(
+                      colors: [AppColors.primary, AppColors.primary700],
+                    )
+                  : LinearGradient(
+                      colors: [
+                        Colors.white.withOpacity(0.08),
+                        Colors.white.withOpacity(0.04),
+                      ],
+                    ),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(
+                color: _agreeToTerms
+                    ? AppColors.primary.withOpacity(0.5)
+                    : Colors.white.withOpacity(0.15),
+                width: 1,
+              ),
+            ),
+            child: _agreeToTerms
+                ? const Icon(Icons.check, size: 14, color: Colors.white)
+                : null,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text.rich(
+            TextSpan(
+              text: 'I agree to the ',
+              style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+              children: [
+                TextSpan(
+                  text: 'Terms',
+                  style: TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const TextSpan(text: ' and '),
+                TextSpan(
+                  text: 'Privacy Policy',
+                  style: TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGlassButton({
+    required String label,
+    required VoidCallback? onTap,
+    required bool isPrimary,
+    bool isEnabled = true,
+    Widget? icon,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 48,
+        decoration: BoxDecoration(
+          gradient: isPrimary
+              ? LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: isEnabled
+                      ? [AppColors.primary, AppColors.primary700]
+                      : [
+                          AppColors.primary.withOpacity(0.3),
+                          AppColors.primary700.withOpacity(0.3),
+                        ],
+                )
+              : LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Colors.white.withOpacity(0.1),
+                    Colors.white.withOpacity(0.05),
+                  ],
+                ),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isPrimary
+                ? (isEnabled
+                    ? AppColors.primary.withOpacity(0.5)
+                    : AppColors.primary.withOpacity(0.2))
+                : Colors.white.withOpacity(0.15),
+            width: 1,
+          ),
+          boxShadow: isPrimary && isEnabled
+              ? [
+                  BoxShadow(
+                    color: AppColors.primary.withOpacity(0.3),
+                    blurRadius: 15,
+                    offset: const Offset(0, 5),
+                  ),
+                ]
+              : null,
+        ),
+        child: Stack(
+          children: [
+            // Top reflection
+            if (isPrimary && isEnabled)
+              Positioned(
+                top: 0,
+                left: 20,
+                right: 20,
+                child: Container(
+                  height: 1,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.transparent,
+                        Colors.white.withOpacity(0.3),
+                        Colors.transparent,
                       ],
                     ),
                   ),
                 ),
-
-                const SizedBox(height: 20),
-
-                // Login Link
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      'Already have an account? ',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.grey[500],
-                      ),
-                    ),
-                    GestureDetector(
-                      onTap: () => context.go(AppRoutes.login),
-                      child: Text(
-                        'Sign In',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
+              ),
+            // Button content
+            Center(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (icon != null) ...[
+                    icon,
+                    const SizedBox(width: 10),
                   ],
-                ),
-
-                const SizedBox(height: 32),
-              ],
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: isPrimary
+                          ? (isEnabled
+                              ? Colors.white
+                              : Colors.white.withOpacity(0.5))
+                          : Colors.white.withOpacity(0.9),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );

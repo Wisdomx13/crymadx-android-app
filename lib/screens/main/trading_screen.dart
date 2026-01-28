@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:math';
@@ -85,6 +86,13 @@ class _TradingScreenState extends State<TradingScreen> with TickerProviderStateM
 
   Timer? _refreshTimer;
   Timer? _candleTimer;
+
+  // Chart pan/zoom state for scrollability
+  double _chartOffset = 0.0;
+  double _chartZoom = 1.0;
+  int _visibleCandles = 50;
+  int _startIndex = 0;
+  bool _isDragging = false;
 
   // Convert section state
   final CryptoService _cryptoService = CryptoService();
@@ -252,7 +260,7 @@ class _TradingScreenState extends State<TradingScreen> with TickerProviderStateM
           'category': 'spot',
           'symbol': _symbol,
           'interval': _interval,
-          'limit': 100,
+          'limit': 200,
         },
       );
 
@@ -421,7 +429,13 @@ class _TradingScreenState extends State<TradingScreen> with TickerProviderStateM
       backgroundColor: bgColor,
       // Sticky trade buttons at absolute bottom (only for Spot view)
       bottomSheet: _topTabIndex == 1 && !_isLoading ? _buildStickyTradeButtons() : null,
-      body: SafeArea(
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: BoxDecoration(
+          color: bgColor,
+        ),
+        child: SafeArea(
         child: _isLoading
             ? _buildLoadingState()
             : Center(
@@ -432,11 +446,11 @@ class _TradingScreenState extends State<TradingScreen> with TickerProviderStateM
                       : EdgeInsets.zero,
                   decoration: screenWidth > 500
                       ? BoxDecoration(
-                          color: bgColor,
+                          color: isDark ? Colors.transparent : bgColor,
                           border: Border.all(color: borderColor, width: 0.5),
                           borderRadius: BorderRadius.circular(16),
                         )
-                      : BoxDecoration(color: bgColor),
+                      : BoxDecoration(color: isDark ? Colors.transparent : bgColor),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(screenWidth > 500 ? 16 : 0),
                     child: Column(
@@ -474,6 +488,7 @@ class _TradingScreenState extends State<TradingScreen> with TickerProviderStateM
                   ),
                 ),
               ),
+      ),
       ),
     );
   }
@@ -894,17 +909,54 @@ class _TradingScreenState extends State<TradingScreen> with TickerProviderStateM
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4),
       child: GestureDetector(
+        onHorizontalDragStart: (details) {
+          setState(() {
+            _isDragging = true;
+          });
+        },
         onHorizontalDragUpdate: (details) {
-          // Chart scrolling/panning is handled by the painter
+          if (_candles.isEmpty) return;
+
+          setState(() {
+            final dragDelta = details.delta.dx;
+            // Calculate candle width based on screen width
+            final screenWidth = MediaQuery.of(context).size.width;
+            final candleWidth = (screenWidth - 60) / _visibleCandles;
+            final candlesDelta = (dragDelta / candleWidth).round();
+
+            // Update start index (scroll through candles)
+            _startIndex = (_startIndex - candlesDelta).clamp(0, max(_candles.length - _visibleCandles, 0));
+
+            // Update chart offset for smooth panning
+            _chartOffset += dragDelta;
+          });
+        },
+        onHorizontalDragEnd: (details) {
+          setState(() {
+            _isDragging = false;
+            _chartOffset = 0.0;
+          });
         },
         child: _showLineChart
             ? CustomPaint(
                 size: Size.infinite,
-                painter: BybitLineChartPainter(candles: _candles, currentPrice: _lastPrice),
+                painter: BybitLineChartPainter(
+                  candles: _candles,
+                  currentPrice: _lastPrice,
+                  startIndex: _startIndex,
+                  visibleCount: _visibleCandles,
+                  chartOffset: _chartOffset,
+                ),
               )
             : CustomPaint(
                 size: Size.infinite,
-                painter: BybitCandlestickPainter(candles: _candles, currentPrice: _lastPrice),
+                painter: BybitCandlestickPainter(
+                  candles: _candles,
+                  currentPrice: _lastPrice,
+                  startIndex: _startIndex,
+                  visibleCount: _visibleCandles,
+                  chartOffset: _chartOffset,
+                ),
               ),
       ),
     );
@@ -2304,8 +2356,17 @@ class TradeData {
 class BybitCandlestickPainter extends CustomPainter {
   final List<CandleData> candles;
   final double currentPrice;
+  final int startIndex;
+  final int visibleCount;
+  final double chartOffset;
 
-  BybitCandlestickPainter({required this.candles, required this.currentPrice});
+  BybitCandlestickPainter({
+    required this.candles,
+    required this.currentPrice,
+    required this.startIndex,
+    required this.visibleCount,
+    required this.chartOffset,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -2314,9 +2375,16 @@ class BybitCandlestickPainter extends CustomPainter {
     const rightMargin = 45.0;
     final chartWidth = size.width - rightMargin;
 
+    // Get visible candles only
+    final endIndex = min(startIndex + visibleCount, candles.length);
+    final visibleCandles = candles.sublist(startIndex, endIndex);
+
+    if (visibleCandles.isEmpty) return;
+
+    // Calculate price range from visible candles only
     double minPrice = double.infinity;
     double maxPrice = double.negativeInfinity;
-    for (final c in candles) {
+    for (final c in visibleCandles) {
       minPrice = min(minPrice, c.low);
       maxPrice = max(maxPrice, c.high);
     }
@@ -2326,7 +2394,7 @@ class BybitCandlestickPainter extends CustomPainter {
     final range = maxPrice - minPrice;
     if (range == 0) return;
 
-    final candleWidth = chartWidth / candles.length;
+    final candleWidth = chartWidth / visibleCount;
     final bodyWidth = candleWidth * 0.75;
 
     final gridPaint = Paint()..color = const Color(0xFF1A1A1A)..strokeWidth = 0.5;
@@ -2338,12 +2406,13 @@ class BybitCandlestickPainter extends CustomPainter {
       _drawText(canvas, _formatPriceLabel(price), Offset(chartWidth + 2, y - 5), const Color(0xFF5A5A5A), 8);
     }
 
-    for (int i = 0; i < candles.length; i++) {
-      final c = candles[i];
+    // Draw visible candles with offset for smooth panning
+    for (int i = 0; i < visibleCandles.length; i++) {
+      final c = visibleCandles[i];
       final isGreen = c.close >= c.open;
       final color = isGreen ? const Color(0xFF00C853) : const Color(0xFFFF5252);
 
-      final x = i * candleWidth + candleWidth / 2;
+      final x = (i * candleWidth + candleWidth / 2) + chartOffset;
       final highY = size.height * (1 - (c.high - minPrice) / range);
       final lowY = size.height * (1 - (c.low - minPrice) / range);
       final openY = size.height * (1 - (c.open - minPrice) / range);
@@ -2396,7 +2465,12 @@ class BybitCandlestickPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+  bool shouldRepaint(covariant BybitCandlestickPainter oldDelegate) {
+    return oldDelegate.startIndex != startIndex ||
+           oldDelegate.chartOffset != chartOffset ||
+           oldDelegate.candles.length != candles.length ||
+           oldDelegate.currentPrice != currentPrice;
+  }
 }
 
 class BybitVolumePainter extends CustomPainter {
@@ -2441,8 +2515,17 @@ class BybitVolumePainter extends CustomPainter {
 class BybitLineChartPainter extends CustomPainter {
   final List<CandleData> candles;
   final double currentPrice;
+  final int startIndex;
+  final int visibleCount;
+  final double chartOffset;
 
-  BybitLineChartPainter({required this.candles, required this.currentPrice});
+  BybitLineChartPainter({
+    required this.candles,
+    required this.currentPrice,
+    required this.startIndex,
+    required this.visibleCount,
+    required this.chartOffset,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -2451,10 +2534,16 @@ class BybitLineChartPainter extends CustomPainter {
     const rightMargin = 45.0;
     final chartWidth = size.width - rightMargin;
 
-    // Find price range
+    // Get visible candles only
+    final endIndex = min(startIndex + visibleCount, candles.length);
+    final visibleCandles = candles.sublist(startIndex, endIndex);
+
+    if (visibleCandles.isEmpty) return;
+
+    // Find price range from visible candles only
     double minPrice = double.infinity;
     double maxPrice = double.negativeInfinity;
-    for (final c in candles) {
+    for (final c in visibleCandles) {
       minPrice = min(minPrice, c.low);
       maxPrice = max(maxPrice, c.high);
     }
@@ -2474,14 +2563,14 @@ class BybitLineChartPainter extends CustomPainter {
       _drawText(canvas, _formatPriceLabel(price), Offset(chartWidth + 2, y - 5), const Color(0xFF5A5A5A), 8);
     }
 
-    // Draw gradient fill under line
+    // Draw gradient fill under line with visible candles
     final path = Path();
     final linePoints = <Offset>[];
-    final pointWidth = chartWidth / candles.length;
+    final pointWidth = chartWidth / visibleCount;
 
-    for (int i = 0; i < candles.length; i++) {
-      final x = i * pointWidth + pointWidth / 2;
-      final y = size.height * (1 - (candles[i].close - minPrice) / range);
+    for (int i = 0; i < visibleCandles.length; i++) {
+      final x = (i * pointWidth + pointWidth / 2) + chartOffset;
+      final y = size.height * (1 - (visibleCandles[i].close - minPrice) / range);
       linePoints.add(Offset(x, y));
     }
 
@@ -2564,5 +2653,10 @@ class BybitLineChartPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+  bool shouldRepaint(covariant BybitLineChartPainter oldDelegate) {
+    return oldDelegate.startIndex != startIndex ||
+           oldDelegate.chartOffset != chartOffset ||
+           oldDelegate.candles.length != candles.length ||
+           oldDelegate.currentPrice != currentPrice;
+  }
 }
